@@ -34,12 +34,6 @@
             <div class="sc-label">Expenses</div>
           </div>
         </div>
-        <div class="alert info" style="border-radius:var(--radius-sm);">
-          <div class="alert-dot" />
-          <div class="alert-text">
-            📊 PDF export &amp; detailed monthly reports will be available once Firebase is connected.
-          </div>
-        </div>
       </template>
 
       <!-- ── ANIMALS TAB ── -->
@@ -112,6 +106,59 @@
         </div>
       </template>
 
+      <!-- ── SOLD ANIMALS TAB ── -->
+      <template v-if="activeTab === 'sold'">
+
+        <!-- SUMMARY CARDS -->
+        <div class="stats-grid" style="margin-bottom:16px;">
+          <div class="stat-card card">
+            <div class="sc-val">{{ animalStore.soldAnimals.length }}</div>
+            <div class="sc-label">Total Sold</div>
+          </div>
+          <div class="stat-card card">
+            <div class="sc-val positive">₱{{ finance.formatNum(totalSoldRevenue) }}</div>
+            <div class="sc-label">Total Revenue</div>
+          </div>
+          <div class="stat-card card">
+            <div class="sc-val negative">₱{{ finance.formatNum(totalSoldCost) }}</div>
+            <div class="sc-label">Total Cost</div>
+          </div>
+          <div class="stat-card card">
+            <div :class="['sc-val', animalStore.totalSaleProfit >= 0 ? 'positive' : 'negative']">
+              {{ animalStore.totalSaleProfit >= 0 ? '+' : '' }}₱{{ finance.formatNum(animalStore.totalSaleProfit) }}
+            </div>
+            <div class="sc-label">Net Profit</div>
+          </div>
+        </div>
+
+        <!-- SOLD LIST -->
+        <div class="section-title">Sold Animal Records</div>
+        <div v-if="animalStore.soldAnimals.length" class="sold-list">
+          <div class="sold-item card" v-for="s in animalStore.soldAnimals" :key="s.id">
+            <div class="sold-emoji">{{ animalStore.animalEmoji(s.type) }}</div>
+            <div class="sold-info">
+              <div class="sold-name">{{ s.name || '(unnamed)' }} <span class="sold-type">{{ s.type }}</span></div>
+              <div class="sold-meta">
+                Sold {{ s.soldDate }}{{ s.soldTo ? ' → ' + s.soldTo : '' }}
+              </div>
+              <div class="sold-prices">
+                <span class="sp-item">Cost: ₱{{ finance.formatNum(s.boughtFor) }}</span>
+                <span class="sp-arrow">→</span>
+                <span class="sp-item">Sold: ₱{{ finance.formatNum(s.soldFor) }}</span>
+              </div>
+            </div>
+            <div :class="['sold-profit', s.profit >= 0 ? 'pos' : 'neg']">
+              {{ s.profit >= 0 ? '+' : '' }}₱{{ finance.formatNum(s.profit) }}
+            </div>
+          </div>
+        </div>
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">💰</div>
+          <div class="empty-state-text">No animals sold yet.<br>Tap 💰 on any animal to record a sale.</div>
+        </div>
+
+      </template>
+
     </div>
   </div>
 </template>
@@ -131,10 +178,11 @@ const tabs = [
   { key: 'monthly', label: 'Monthly' },
   { key: 'animals', label: 'Animals' },
   { key: 'finance', label: 'Finance' },
+  { key: 'sold',    label: 'Sold 💰' },
 ]
 const activeTab = ref('monthly')
 
-const currentMonth = new Date().toISOString().slice(0, 7)
+const currentMonth      = new Date().toISOString().slice(0, 7)
 const currentMonthLabel = new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
 
 const animalsAddedThisMonth = computed(() =>
@@ -152,26 +200,33 @@ const healthBreakdown = computed(() => {
     color: colors[label] ?? '#999', icon: icons[label] ?? '❓',
   }))
 })
+
+const totalSoldRevenue = computed(() =>
+  animalStore.soldAnimals.reduce((s, a) => s + (Number(a.soldFor) || 0), 0)
+)
+const totalSoldCost = computed(() =>
+  animalStore.soldAnimals.reduce((s, a) => s + (Number(a.boughtFor) || 0), 0)
+)
 </script>
 
 <style scoped>
 .tabs {
   display: flex; gap: 4px;
   background: var(--bg2); border-radius: 12px; padding: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 20px; overflow-x: auto;
 }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
-  flex: 1; text-align: center; padding: 9px;
-  border-radius: 9px; font-size: 13px; font-weight: 500;
+  flex: 1; text-align: center; padding: 9px; white-space: nowrap;
+  border-radius: 9px; font-size: 12px; font-weight: 500;
   cursor: pointer; border: none; background: none;
-  font-family: 'Outfit', sans-serif; color: var(--muted);
-  transition: all 0.15s;
+  font-family: 'Outfit', sans-serif; color: var(--muted); transition: all 0.15s;
 }
 .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 .stat-card  { padding: 16px; }
-.sc-val     { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+.sc-val     { font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .sc-label   { font-size: 11px; color: var(--muted); margin-top: 4px; }
 .sc-val.positive { color: var(--green); }
 .sc-val.negative { color: var(--red); }
@@ -184,8 +239,7 @@ const healthBreakdown = computed(() => {
 .bar-fill {
   height: 100%; border-radius: 4px; min-width: 40px;
   display: flex; align-items: center; padding-left: 8px;
-  font-size: 10px; font-weight: 600; color: #fff;
-  transition: width 0.6s ease;
+  font-size: 10px; font-weight: 600; color: #fff; transition: width 0.6s ease;
 }
 .bar-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; width: 30px; text-align: right; flex-shrink: 0; }
 
@@ -209,4 +263,24 @@ const healthBreakdown = computed(() => {
 .fs-val.big { font-size: 20px; }
 .fs-val.positive { color: var(--green); }
 .fs-val.negative { color: var(--red); }
+
+/* SOLD LIST */
+.sold-list { display: flex; flex-direction: column; gap: 10px; }
+.sold-item {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+}
+.sold-emoji { font-size: 28px; flex-shrink: 0; }
+.sold-info  { flex: 1; min-width: 0; }
+.sold-name  { font-weight: 600; font-size: 14px; }
+.sold-type  { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+.sold-meta  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sold-prices { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.sp-item { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+.sp-arrow { font-size: 11px; color: var(--muted); }
+.sold-profit {
+  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700;
+  flex-shrink: 0; white-space: nowrap;
+}
+.sold-profit.pos { color: var(--green); }
+.sold-profit.neg { color: var(--red); }
 </style>

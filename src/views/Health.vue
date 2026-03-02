@@ -83,7 +83,7 @@ const healthStore = useHealthStore()
 const ui          = useUIStore()
 
 function animalEmoji(type) {
-  return { Goat:'🐐', Chicken:'🐔', Duck:'🦆', Pig:'🐷', Cow:'🐄' }[type] ?? '🐾'
+  return { Goat:'🐐', Duck:'🦆' }[type] ?? '🐾'
 }
 </script>
 

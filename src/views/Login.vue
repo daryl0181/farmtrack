@@ -40,9 +40,17 @@ async function handleLogin() {
   loading.value = true
   try {
     await auth.login(email.value, password.value)
+    // Small delay to let Firebase update currentUser before the router guard runs
+    await new Promise(r => setTimeout(r, 100))
     router.push('/')
   } catch (e) {
-    error.value = 'Invalid email or password.'
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      error.value = 'Invalid email or password.'
+    } else if (e.code === 'auth/too-many-requests') {
+      error.value = 'Too many attempts. Please try again later.'
+    } else {
+      error.value = 'Something went wrong. Try again.'
+    }
   } finally {
     loading.value = false
   }
@@ -61,7 +69,18 @@ async function handleLogin() {
   width: 100%; max-width: 380px;
   box-shadow: var(--shadow-lg);
 }
-.login-logo { font-size: 28px; font-weight: 800; font-family: 'Outfit', sans-serif; text-align: center; margin-bottom: 4px; }
-.login-sub  { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 28px; }
-.error-msg  { background: var(--red-pale); color: var(--red); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+.login-logo {
+  font-size: 28px; font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  text-align: center; margin-bottom: 4px;
+}
+.login-sub {
+  text-align: center; color: var(--muted);
+  font-size: 14px; margin-bottom: 28px;
+}
+.error-msg {
+  background: var(--red-pale); color: var(--red);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; margin-bottom: 12px;
+}
 </style>

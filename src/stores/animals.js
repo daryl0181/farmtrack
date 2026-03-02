@@ -14,20 +14,39 @@ import { db } from "@/firebase";
 
 export const useAnimalStore = defineStore("animals", () => {
   const animals = ref([]);
-  const ducksSold = ref(0);
+  const soldAnimals = ref([]);
   let unsubscribe = null;
+  let unsubSold = null;
 
-  // Start real-time listener
   function startListener() {
     const q = query(collection(db, "animals"), orderBy("addedDate", "desc"));
-    unsubscribe = onSnapshot(q, (snapshot) => {
-      animals.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    });
+    unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        animals.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
+      (e) => console.error("[animals]", e.message),
+    );
+
+    const qs = query(
+      collection(db, "soldAnimals"),
+      orderBy("soldDate", "desc"),
+    );
+    unsubSold = onSnapshot(
+      qs,
+      (snapshot) => {
+        soldAnimals.value = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+      },
+      (e) => console.error("[soldAnimals]", e.message),
+    );
   }
 
-  // Stop listener when no longer needed
   function stopListener() {
     if (unsubscribe) unsubscribe();
+    if (unsubSold) unsubSold();
   }
 
   async function addAnimal(data) {
@@ -35,7 +54,6 @@ export const useAnimalStore = defineStore("animals", () => {
       ...data,
       addedDate: new Date().toISOString().slice(0, 10),
     });
-    // No need to update animals.value — the onSnapshot listener does it automatically
   }
 
   async function removeAnimal(id) {
@@ -46,33 +64,85 @@ export const useAnimalStore = defineStore("animals", () => {
     await updateDoc(doc(db, "animals", id), data);
   }
 
-  // All your computed values stay exactly the same
+  // Sell an animal: move to soldAnimals, auto-record income transaction
+  async function sellAnimal({ animal, soldFor, soldTo, soldDate }) {
+    const today = soldDate || new Date().toISOString().slice(0, 10);
+
+    // 1. Save to soldAnimals collection
+    await addDoc(collection(db, "soldAnimals"), {
+      name: animal.name || "",
+      type: animal.type || "",
+      sex: animal.sex || "",
+      age: animal.age || "",
+      weight: animal.weight || "",
+      boughtFor: Number(animal.boughtFor) || 0,
+      soldFor: Number(soldFor),
+      soldTo: soldTo || "",
+      soldDate: today,
+      profit: Number(soldFor) - (Number(animal.boughtFor) || 0),
+      addedDate: animal.addedDate || "",
+    });
+
+    // 2. Record as Income transaction in finance
+    await addDoc(collection(db, "transactions"), {
+      type: "Income",
+      category: "Animal Sale",
+      amount: Number(soldFor),
+      description: `Sold ${animal.type}${animal.name ? " – " + animal.name : ""}${soldTo ? " to " + soldTo : ""}`,
+      date: today,
+    });
+
+    // 3. Remove from active animals
+    await deleteDoc(doc(db, "animals", animal.id));
+  }
+
   const totalAnimals = computed(() => animals.value.length);
   const goats = computed(() => animals.value.filter((a) => a.type === "Goat"));
-  const chickens = computed(() =>
-    animals.value.filter((a) => a.type === "Chicken"),
-  );
   const ducks = computed(() => animals.value.filter((a) => a.type === "Duck"));
   const others = computed(() =>
-    animals.value.filter((a) => !["Goat", "Chicken", "Duck"].includes(a.type)),
+    animals.value.filter((a) => !["Goat", "Duck"].includes(a.type)),
   );
   const femaleGoats = computed(() =>
     goats.value.filter((a) => a.sex === "Female"),
   );
   const maleGoats = computed(() => goats.value.filter((a) => a.sex === "Male"));
-  const femaleChickens = computed(
-    () => chickens.value.filter((a) => a.sex === "Female").length,
-  );
-  const maleChickens = computed(
-    () => chickens.value.filter((a) => a.sex === "Male").length,
+
+  const byType = computed(() => {
+    const total = animals.value.length || 1;
+    const types = [
+      {
+        type: "Goat",
+        emoji: "🐐",
+        color: "#2d6a4f",
+        count: goats.value.length,
+      },
+      {
+        type: "Duck",
+        emoji: "🦆",
+        color: "#1d6fa5",
+        count: ducks.value.length,
+      },
+      {
+        type: "Other",
+        emoji: "🐾",
+        color: "#888888",
+        count: others.value.length,
+      },
+    ];
+    return types
+      .filter((t) => t.count > 0)
+      .map((t) => ({ ...t, pct: Math.round((t.count / total) * 100) }));
+  });
+
+  // Total profit from all sales
+  const totalSaleProfit = computed(() =>
+    soldAnimals.value.reduce((s, a) => s + (Number(a.profit) || 0), 0),
   );
 
   function animalEmoji(type) {
-    return (
-      { Goat: "🐐", Chicken: "🐔", Duck: "🦆", Pig: "🐷", Cow: "🐄" }[type] ??
-      "🐾"
-    );
+    return { Goat: "🐐", Duck: "🦆" }[type] ?? "🐾";
   }
+
   function healthTagColor(health) {
     return (
       {
@@ -86,21 +156,22 @@ export const useAnimalStore = defineStore("animals", () => {
 
   return {
     animals,
-    ducksSold,
+    soldAnimals,
     totalAnimals,
+    totalSaleProfit,
     goats,
-    chickens,
+
     ducks,
     others,
     femaleGoats,
     maleGoats,
-    femaleChickens,
-    maleChickens,
+    byType,
     startListener,
     stopListener,
     addAnimal,
     removeAnimal,
     updateAnimal,
+    sellAnimal,
     animalEmoji,
     healthTagColor,
   };

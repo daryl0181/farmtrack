@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { getAuth } from "firebase/auth";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import Dashboard from "@/views/Dashboard.vue";
 import Animals from "@/views/Animals.vue";
 import Finance from "@/views/Finance.vue";
@@ -24,28 +24,22 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-// This promise resolves once Firebase has finished loading the saved session
-// It only runs once on app startup
-let authReady = null;
-
-function waitForAuthReady() {
-  if (authReady) return authReady;
-  authReady = new Promise((resolve) => {
-    const unsubscribe = getAuth().onAuthStateChanged((user) => {
-      unsubscribe(); // stop listening after the first result
-      resolve(user);
-    });
+// Wait for Firebase to resolve the initial session on page load
+const authReady = new Promise((resolve) => {
+  const unsubscribe = onAuthStateChanged(getAuth(), (user) => {
+    unsubscribe();
+    resolve();
   });
-  return authReady;
-}
+});
 
 router.beforeEach(async (to) => {
-  const user = await waitForAuthReady();
+  // Always wait for Firebase to finish loading the session first
+  await authReady;
 
-  // Not logged in and trying to access a protected page → go to login
+  // Now currentUser is accurate
+  const user = getAuth().currentUser;
+
   if (to.meta.requiresAuth && !user) return "/login";
-
-  // Already logged in and trying to go to /login → go to home
   if (to.path === "/login" && user) return "/";
 });
 

@@ -4,7 +4,7 @@
       <template #right>
         <div style="text-align:right;">
           <div class="header-date">{{ todayStr }}</div>
-          <div class="avatar">👨‍🌾</div>
+          <button class="logout-btn" @click="handleLogout">Sign Out</button>
         </div>
       </template>
       <div class="header-stats cols-4">
@@ -47,6 +47,7 @@
         <RouterLink to="/animals" class="link">See all →</RouterLink>
       </div>
       <div class="animal-grid">
+        <!-- GOATS -->
         <div class="animal-card" @click="$router.push('/animals')">
           <span class="ac-emoji">🐐</span>
           <div class="ac-name">Goats</div>
@@ -54,17 +55,12 @@
           <div class="ac-sub">{{ animalStore.maleGoats.length }} male · {{ animalStore.femaleGoats.length }} female</div>
           <span class="tag purple ac-badge" v-if="breedingStore.pregnancyCount">{{ breedingStore.pregnancyCount }} pregnant</span>
         </div>
-        <div class="animal-card" @click="$router.push('/animals')">
-          <span class="ac-emoji">🐔</span>
-          <div class="ac-name">Chickens</div>
-          <div class="ac-count">{{ animalStore.chickens.length }}</div>
-          <div class="ac-sub">{{ animalStore.maleChickens }} male · {{ animalStore.femaleChickens }} female</div>
-        </div>
+        <!-- DUCKS -->
         <div class="animal-card" @click="$router.push('/animals')">
           <span class="ac-emoji">🦆</span>
           <div class="ac-name">Ducks</div>
           <div class="ac-count">{{ animalStore.ducks.length }}</div>
-          <div class="ac-sub">{{ animalStore.ducksSold }} sold</div>
+          <div class="ac-sub">{{ maleDucks }} male · {{ femaleDucks }} female</div>
         </div>
       </div>
 
@@ -155,6 +151,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader      from '@/components/PageHeader.vue'
 import PregnancyCard   from '@/components/PregnancyCard.vue'
 import TransactionItem from '@/components/TransactionItem.vue'
@@ -162,11 +159,14 @@ import { useAnimalStore }   from '@/stores/animals'
 import { useFinanceStore }  from '@/stores/finance'
 import { useBreedingStore } from '@/stores/breeding'
 import { useUIStore }       from '@/stores/ui'
+import { useAuthStore }     from '@/stores/auth'
 
 const animalStore   = useAnimalStore()
 const finance       = useFinanceStore()
 const breedingStore = useBreedingStore()
 const ui            = useUIStore()
+const auth          = useAuthStore()
+const router        = useRouter()
 
 const todayStr = new Date().toLocaleDateString('en-PH', {
   weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
@@ -180,6 +180,15 @@ const greeting = computed(() => {
   return 'Good night 🌙'
 })
 
+// Duck male/female counts
+const maleDucks   = computed(() => animalStore.ducks.filter(a => a.sex === 'Male').length)
+const femaleDucks = computed(() => animalStore.ducks.filter(a => a.sex === 'Female').length)
+
+async function handleLogout() {
+  await auth.logout()
+  router.push('/login')
+}
+
 const allAlerts = computed(() => {
   const a = [...breedingStore.alerts]
   if (finance.profit < 0) a.push({ type: 'danger', msg: `Farm is currently at a <strong>loss of ₱${finance.formatNum(Math.abs(finance.profit))}</strong>. Review your expenses.` })
@@ -189,12 +198,19 @@ const allAlerts = computed(() => {
 </script>
 
 <style scoped>
-.avatar {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; margin-left: auto; margin-top: 6px;
+.logout-btn {
+  margin-top: 6px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px; font-weight: 500;
+  padding: 5px 10px; border-radius: 8px;
+  cursor: pointer; transition: all 0.15s;
+  display: block; margin-left: auto;
 }
+.logout-btn:active { background: rgba(255,255,255,0.25); }
+
 .alert-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
 
 /* HEADER STATS - 4 columns */
@@ -202,8 +218,8 @@ const allAlerts = computed(() => {
 .cols-4 .header-stat-val { font-size: 14px; }
 .cols-4 .header-stat-label { font-size: 9px; }
 
-/* ANIMAL GRID - 3 columns */
-.animal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+/* ANIMAL GRID - 2 columns now (no chicken) */
+.animal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 .animal-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 12px;
