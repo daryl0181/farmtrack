@@ -10,22 +10,23 @@
       <AppModal v-if="ui.activeModal" />
     </Teleport>
 
-    <!-- Show loading spinner while Firebase checks if user is logged in -->
+    <!-- Loading screen while Firebase checks session -->
     <div v-if="auth.loading" class="loading-screen">
       <div class="loading-icon">🐐</div>
       <div class="loading-text">Loading FarmTrack…</div>
     </div>
 
-    <!-- Once auth is ready, show the app -->
     <template v-else>
       <RouterView />
-      <BottomNav v-if="auth.isLoggedIn" />
+      <!-- Only show BottomNav when logged in AND not on login page -->
+      <BottomNav v-if="auth.isLoggedIn && route.path !== '/login'" />
     </template>
   </div>
 </template>
 
 <script setup>
 import { watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useUIStore }       from '@/stores/ui'
 import { useAuthStore }     from '@/stores/auth'
 import { useAnimalStore }   from '@/stores/animals'
@@ -35,6 +36,7 @@ import { useHealthStore }   from '@/stores/health'
 import BottomNav from '@/components/BottomNav.vue'
 import AppModal  from '@/components/AppModal.vue'
 
+const route    = useRoute()
 const ui       = useUIStore()
 const auth     = useAuthStore()
 const animals  = useAnimalStore()
@@ -42,7 +44,6 @@ const finance  = useFinanceStore()
 const breeding = useBreedingStore()
 const health   = useHealthStore()
 
-// Watch for login/logout and start or stop Firestore listeners accordingly
 watch(
   () => auth.isLoggedIn,
   (loggedIn) => {
@@ -58,7 +59,7 @@ watch(
       health.stopListener()
     }
   },
-  { immediate: true } // runs on app startup too, not just when it changes
+  { immediate: true }
 )
 </script>
 
@@ -88,7 +89,7 @@ watch(
 .loading-text { font-size: 14px; color: var(--muted); }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0);    }
+  0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-8px); }
 }
 </style>

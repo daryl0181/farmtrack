@@ -1,20 +1,26 @@
 <template>
   <div>
-    <PageHeader greeting="Good morning 👋" title="Dela Cruz Farm">
+    <PageHeader :greeting="greeting" title="Severino Farm">
       <template #right>
         <div style="text-align:right;">
           <div class="header-date">{{ todayStr }}</div>
           <div class="avatar">👨‍🌾</div>
         </div>
       </template>
-      <div class="header-stats cols-3">
+      <div class="header-stats cols-4">
         <div class="header-stat">
           <div class="header-stat-val">{{ animalStore.totalAnimals }}</div>
-          <div class="header-stat-label">Animals</div>
+          <div class="header-stat-label">Total Animals</div>
         </div>
         <div class="header-stat">
-          <div class="header-stat-val" style="color:var(--green-light);">{{ breedingStore.pregnancyCount }}</div>
-          <div class="header-stat-label">Pregnant 🐐</div>
+          <div class="header-stat-val">₱{{ finance.formatNum(finance.totalInvested) }}</div>
+          <div class="header-stat-label">Invested</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-val" style="color:var(--green-light);">
+            ₱{{ finance.formatNum(finance.totalIncome) }}
+          </div>
+          <div class="header-stat-label">Total Sold</div>
         </div>
         <div class="header-stat">
           <div class="header-stat-val" :style="{ color: finance.profit >= 0 ? '#7ee787' : '#f8a09d' }">
@@ -45,26 +51,20 @@
           <span class="ac-emoji">🐐</span>
           <div class="ac-name">Goats</div>
           <div class="ac-count">{{ animalStore.goats.length }}</div>
-          <div class="ac-sub">{{ animalStore.maleGoats.length }}♂ · {{ animalStore.femaleGoats.length }}♀</div>
+          <div class="ac-sub">{{ animalStore.maleGoats.length }} male · {{ animalStore.femaleGoats.length }} female</div>
           <span class="tag purple ac-badge" v-if="breedingStore.pregnancyCount">{{ breedingStore.pregnancyCount }} pregnant</span>
         </div>
         <div class="animal-card" @click="$router.push('/animals')">
           <span class="ac-emoji">🐔</span>
           <div class="ac-name">Chickens</div>
           <div class="ac-count">{{ animalStore.chickens.length }}</div>
-          <div class="ac-sub">{{ animalStore.maleChickens }}♂ · {{ animalStore.femaleChickens }}♀</div>
+          <div class="ac-sub">{{ animalStore.maleChickens }} male · {{ animalStore.femaleChickens }} female</div>
         </div>
         <div class="animal-card" @click="$router.push('/animals')">
           <span class="ac-emoji">🦆</span>
           <div class="ac-name">Ducks</div>
           <div class="ac-count">{{ animalStore.ducks.length }}</div>
           <div class="ac-sub">{{ animalStore.ducksSold }} sold</div>
-        </div>
-        <div class="animal-card" @click="$router.push('/animals')">
-          <span class="ac-emoji">🐾</span>
-          <div class="ac-name">Others</div>
-          <div class="ac-count">{{ animalStore.others.length }}</div>
-          <div class="ac-sub">Pigs, cows…</div>
         </div>
       </div>
 
@@ -102,7 +102,7 @@
           <span class="f-val">₱{{ finance.formatNum(finance.totalInvested) }}</span>
         </div>
         <div class="finance-row">
-          <span class="f-label">📥 Total Income</span>
+          <span class="f-label">📥 Total Sold / Income</span>
           <span class="f-val positive">₱{{ finance.formatNum(finance.totalIncome) }}</span>
         </div>
         <div class="finance-row">
@@ -155,20 +155,30 @@
 
 <script setup>
 import { computed } from 'vue'
-import PageHeader    from '@/components/PageHeader.vue'
-import PregnancyCard from '@/components/PregnancyCard.vue'
+import PageHeader      from '@/components/PageHeader.vue'
+import PregnancyCard   from '@/components/PregnancyCard.vue'
 import TransactionItem from '@/components/TransactionItem.vue'
-import { useAnimalStore }  from '@/stores/animals'
-import { useFinanceStore } from '@/stores/finance'
+import { useAnimalStore }   from '@/stores/animals'
+import { useFinanceStore }  from '@/stores/finance'
 import { useBreedingStore } from '@/stores/breeding'
-import { useUIStore }      from '@/stores/ui'
+import { useUIStore }       from '@/stores/ui'
 
-const animalStore  = useAnimalStore()
-const finance      = useFinanceStore()
+const animalStore   = useAnimalStore()
+const finance       = useFinanceStore()
 const breedingStore = useBreedingStore()
-const ui           = useUIStore()
+const ui            = useUIStore()
 
-const todayStr = new Date().toLocaleDateString('en-PH', { weekday:'short', year:'numeric', month:'short', day:'numeric' })
+const todayStr = new Date().toLocaleDateString('en-PH', {
+  weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+})
+
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour >= 5  && hour < 12) return 'Good morning 🌅'
+  if (hour >= 12 && hour < 17) return 'Good afternoon ☀️'
+  if (hour >= 17 && hour < 21) return 'Good evening 🌆'
+  return 'Good night 🌙'
+})
 
 const allAlerts = computed(() => {
   const a = [...breedingStore.alerts]
@@ -187,20 +197,25 @@ const allAlerts = computed(() => {
 }
 .alert-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
 
-/* ANIMAL GRID */
-.animal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+/* HEADER STATS - 4 columns */
+.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr !important; }
+.cols-4 .header-stat-val { font-size: 14px; }
+.cols-4 .header-stat-label { font-size: 9px; }
+
+/* ANIMAL GRID - 3 columns */
+.animal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 .animal-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px;
+  border-radius: var(--radius); padding: 14px 12px;
   position: relative; overflow: hidden; cursor: pointer;
   transition: transform 0.15s;
 }
 .animal-card:active { transform: scale(0.97); }
-.ac-emoji  { font-size: 30px; display: block; margin-bottom: 8px; }
-.ac-name   { font-size: 12px; color: var(--muted); font-weight: 500; }
-.ac-count  { font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
-.ac-sub    { font-size: 11px; color: var(--muted); margin-top: 4px; }
-.ac-badge  { position: absolute; top: 12px; right: 10px; }
+.ac-emoji  { font-size: 26px; display: block; margin-bottom: 6px; }
+.ac-name   { font-size: 11px; color: var(--muted); font-weight: 500; }
+.ac-count  { font-size: 24px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1.2; }
+.ac-sub    { font-size: 10px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.ac-badge  { position: absolute; top: 10px; right: 8px; font-size: 9px; }
 
 /* QUICK ACTIONS */
 .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }

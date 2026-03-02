@@ -1,4 +1,3 @@
-// src/router/index.js
 import { createRouter, createWebHistory } from "vue-router";
 import { getAuth } from "firebase/auth";
 import Dashboard from "@/views/Dashboard.vue";
@@ -25,9 +24,29 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 });
 
-router.beforeEach((to) => {
-  const user = getAuth().currentUser;
+// This promise resolves once Firebase has finished loading the saved session
+// It only runs once on app startup
+let authReady = null;
+
+function waitForAuthReady() {
+  if (authReady) return authReady;
+  authReady = new Promise((resolve) => {
+    const unsubscribe = getAuth().onAuthStateChanged((user) => {
+      unsubscribe(); // stop listening after the first result
+      resolve(user);
+    });
+  });
+  return authReady;
+}
+
+router.beforeEach(async (to) => {
+  const user = await waitForAuthReady();
+
+  // Not logged in and trying to access a protected page → go to login
   if (to.meta.requiresAuth && !user) return "/login";
+
+  // Already logged in and trying to go to /login → go to home
+  if (to.path === "/login" && user) return "/";
 });
 
 export default router;

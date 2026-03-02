@@ -25,11 +25,11 @@
           <div class="ai-emoji">{{ animalStore.animalEmoji(a.type) }}</div>
           <div class="ai-info">
             <div class="ai-name">{{ a.name }}</div>
-            <div class="ai-meta">{{ a.sex }} · {{ a.age }} months · {{ a.weight }} kg</div>
+            <div class="ai-meta">{{ a.age }} months · {{ a.weight }} kg</div>
             <div class="ai-tags">
               <span :class="['tag', animalStore.healthTagColor(a.health)]">{{ a.health }}</span>
-              <span class="tag blue" v-if="a.sex === 'Male'">♂ Male</span>
-              <span class="tag purple" v-else>♀ Female</span>
+              <span class="tag blue" v-if="a.sex === 'Male'">Male</span>
+              <span class="tag purple" v-else>Female</span>
               <span class="tag green" v-if="a.addedDate">{{ a.addedDate }}</span>
             </div>
             <div class="ai-notes" v-if="a.notes">📝 {{ a.notes }}</div>
@@ -61,12 +61,13 @@ import { useUIStore }     from '@/stores/ui'
 const animalStore = useAnimalStore()
 const ui          = useUIStore()
 
-const filters      = ['All', 'Goat', 'Chicken', 'Duck', 'Pig', 'Cow']
+// Only Goats, Chickens, Ducks
+const filters      = ['All', 'Goat', 'Chicken', 'Duck']
 const activeFilter = ref('All')
 
 const filteredAnimals = computed(() =>
   activeFilter.value === 'All'
-    ? animalStore.animals
+    ? animalStore.animals.filter(a => ['Goat', 'Chicken', 'Duck'].includes(a.type))
     : animalStore.animals.filter(a => a.type === activeFilter.value)
 )
 </script>
