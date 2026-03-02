@@ -17,12 +17,20 @@ export const useFinanceStore = defineStore("finance", () => {
 
   function startListener() {
     const q = query(collection(db, "transactions"), orderBy("date", "desc"));
-    unsubscribe = onSnapshot(q, (snapshot) => {
-      transactions.value = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-    });
+    unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        transactions.value = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+      },
+      (error) => {
+        // "requires an index" → click the URL printed in console to create it
+        // "Missing or insufficient permissions" → fix Firestore security rules
+        console.error("[finance] onSnapshot error:", error.code, error.message);
+      },
+    );
   }
 
   function stopListener() {
@@ -40,7 +48,6 @@ export const useFinanceStore = defineStore("finance", () => {
     await deleteDoc(doc(db, "transactions", id));
   }
 
-  // All computed values stay the same
   const totalInvested = computed(() =>
     transactions.value
       .filter((t) => t.category === "Capital")
@@ -103,7 +110,7 @@ export const useFinanceStore = defineStore("finance", () => {
         Labor: "👷",
         Equipment: "🔧",
         Capital: "🏦",
-        "Animal Sale": "🐐",
+        "Animal Sale": "💰",
         "Egg Sale": "🥚",
         "Milk Sale": "🥛",
         "Manure Sale": "🌿",
@@ -111,6 +118,7 @@ export const useFinanceStore = defineStore("finance", () => {
       }[cat] ?? "💸"
     );
   }
+
   function formatNum(n) {
     return Number(n || 0).toLocaleString("en-PH");
   }

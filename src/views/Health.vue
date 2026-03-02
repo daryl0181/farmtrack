@@ -31,11 +31,11 @@
         </div>
         <div class="alert info">
           <div class="alert-dot" />
-          <div class="alert-text">Newcastle Disease vaccine for chickens every <strong>6 months</strong>.</div>
+          <div class="alert-text">Vitamin supplement recommended monthly for ducks.</div>
         </div>
         <div class="alert info">
           <div class="alert-dot" />
-          <div class="alert-text">Vitamin supplement recommended monthly for ducks.</div>
+          <div class="alert-text">Check hooves and body condition of goats every <strong>30 days</strong>.</div>
         </div>
       </div>
 
@@ -44,7 +44,7 @@
       <div class="health-list" v-if="healthStore.records.length">
         <div class="health-item card" v-for="r in healthStore.records" :key="r.id">
           <div class="hi-top">
-            <div class="hi-emoji">{{ animalEmoji(r.animalType) }}</div>
+            <div class="hi-emoji">{{ animalStore.animalEmoji(r.animalType) }}</div>
             <div class="hi-info">
               <div class="hi-name">{{ r.animal }}</div>
               <div class="hi-status">{{ r.treatment }}</div>
@@ -76,15 +76,13 @@
 
 <script setup>
 import PageHeader from '@/components/PageHeader.vue'
-import { useHealthStore } from '@/stores/health'
-import { useUIStore }     from '@/stores/ui'
+import { useHealthStore }  from '@/stores/health'
+import { useAnimalStore }  from '@/stores/animals'
+import { useUIStore }      from '@/stores/ui'
 
 const healthStore = useHealthStore()
+const animalStore = useAnimalStore()
 const ui          = useUIStore()
-
-function animalEmoji(type) {
-  return { Goat:'🐐', Duck:'🦆' }[type] ?? '🐾'
-}
 </script>
 
 <style scoped>
