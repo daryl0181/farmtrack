@@ -119,7 +119,7 @@ async function doDelete() {
   padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--border);
   background: var(--surface); color: var(--muted);
   font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;
-}
+} 
 .btn-del {
   padding: 6px 14px; border-radius: 8px; border: none;
   background: var(--red); color: #fff;
