@@ -53,13 +53,17 @@
           <div class="ac-name">Goats</div>
           <div class="ac-count">{{ animalStore.totalGoats }}</div>
           <div class="ac-sub">
-            {{ animalStore.maleGoats }} male ·
+            {{ animalStore.maleGoats }} male
             {{ animalStore.femaleGoats }} female
           </div>
-          <div class="ac-sub" v-if="animalStore.goatBatches.length">
-            {{ animalStore.goatBatches.length }} batch{{
-              animalStore.goatBatches.length > 1 ? "es" : ""
-            }}
+          <div class="ac-sub breed-row">
+            <span
+              v-for="[breed, count] in goatBreedSummary"
+              :key="breed"
+              class="breed-item"
+            >
+              {{ count }} · {{ breed }}
+            </span>
           </div>
           <span class="tag purple ac-badge" v-if="breedingStore.pregnancyCount">
             {{ breedingStore.pregnancyCount }} pregnant
@@ -74,10 +78,14 @@
             {{ animalStore.maleDucks }} male ·
             {{ animalStore.femaleDucks }} female
           </div>
-          <div class="ac-sub" v-if="animalStore.duckBatches.length">
-            {{ animalStore.duckBatches.length }} flock{{
-              animalStore.duckBatches.length > 1 ? "s" : ""
-            }}
+          <div class="ac-sub breed-row">
+            <span
+              v-for="[breed, count] in duckBreedSummary"
+              :key="breed"
+              class="breed-item"
+            >
+              {{ breed }} · {{ count }}
+            </span>
           </div>
         </div>
       </div>
@@ -230,6 +238,30 @@ async function handleLogout() {
   router.push("/login");
 }
 
+// 🐐 Goat breed summary
+const goatBreedSummary = computed(() => {
+  const map = {};
+
+  animalStore.goatBatches.forEach((b) => {
+    if (!map[b.breed]) map[b.breed] = 0;
+    map[b.breed] += b.currentCount || 0;
+  });
+
+  return Object.entries(map);
+});
+
+// 🦆 Duck breed summary
+const duckBreedSummary = computed(() => {
+  const map = {};
+
+  animalStore.duckBatches.forEach((b) => {
+    if (!map[b.breed]) map[b.breed] = 0;
+    map[b.breed] += b.currentCount || 0;
+  });
+
+  return Object.entries(map);
+});
+
 const allAlerts = computed(() => {
   const a = [...breedingStore.alerts];
 
@@ -335,6 +367,15 @@ const allAlerts = computed(() => {
   font-size: 26px;
   display: block;
   margin-bottom: 6px;
+}
+.breed-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap; /* wraps nicely if many breeds */
+}
+
+.breed-item {
+  white-space: nowrap;
 }
 .ac-name {
   font-size: 11px;
