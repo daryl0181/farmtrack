@@ -18,7 +18,6 @@ export const useBreedingStore = defineStore("breeding", () => {
   let unsubPregnancies = null,
     unsubBirthRecords = null;
 
-  // ── LISTENERS ──────────────────────────────────────────────────────────────
   function startListener() {
     unsubPregnancies = onSnapshot(
       query(collection(db, "pregnancies"), orderBy("mateDate", "desc")),
@@ -39,7 +38,6 @@ export const useBreedingStore = defineStore("breeding", () => {
     unsubBirthRecords?.();
   }
 
-  // ── COMPUTED ───────────────────────────────────────────────────────────────
   const pregnancyCount = computed(() => pregnancies.value.length);
 
   const pregnanciesWithProgress = computed(() => {
@@ -64,18 +62,10 @@ export const useBreedingStore = defineStore("breeding", () => {
       })),
   );
 
-  // Total kids born across all records
   const totalKidsBorn = computed(() =>
     birthRecords.value.reduce((s, b) => s + (b.kidsCount || 0), 0),
   );
 
-  // ── ACTIONS ────────────────────────────────────────────────────────────────
-  /**
-   * data: {
-   *   goatName, mateDate, expectedKids,
-   *   motherBreed, fatherBreed, offspringBreed
-   * }
-   */
   async function addPregnancy(data) {
     const mate = new Date(data.mateDate);
     const birth = new Date(mate);
@@ -95,11 +85,6 @@ export const useBreedingStore = defineStore("breeding", () => {
     });
   }
 
-  /**
-   * data: {
-   *   pregnancyId, birthDate, maleKids, femaleKids, offspringBreed
-   * }
-   */
   async function recordBirth({
     pregnancyId,
     birthDate,
@@ -128,7 +113,10 @@ export const useBreedingStore = defineStore("breeding", () => {
     await deleteDoc(doc(db, "pregnancies", id));
   }
 
-  // ── HELPERS ────────────────────────────────────────────────────────────────
+  async function removeBirthRecord(id) {
+    await deleteDoc(doc(db, "birthRecords", id));
+  }
+
   function expectedBirthFromDate(mateDateStr) {
     if (!mateDateStr) return "—";
     const d = new Date(mateDateStr);
@@ -152,6 +140,7 @@ export const useBreedingStore = defineStore("breeding", () => {
     addPregnancy,
     recordBirth,
     removePregnancy,
+    removeBirthRecord,
     expectedBirthFromDate,
   };
 });

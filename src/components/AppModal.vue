@@ -4,9 +4,6 @@
       <div class="modal">
         <div class="modal-handle" />
 
-        <!-- ══════════════════════════════════════════════════════════ -->
-        <!-- ADD BATCH                                                  -->
-        <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'addAnimal'">
           <h2 class="modal-title">➕ Add Animals</h2>
 
@@ -85,9 +82,6 @@
           </button>
         </template>
 
-        <!-- ══════════════════════════════════════════════════════════ -->
-        <!-- ADD TRANSACTION                                            -->
-        <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'addExpense'">
           <h2 class="modal-title">💸 Record Transaction</h2>
           <div class="form-group">

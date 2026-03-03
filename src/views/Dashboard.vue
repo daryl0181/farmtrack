@@ -82,44 +82,56 @@
         </div>
       </div>
 
-  
-
-     <!-- Replace the Quick Actions section in DashboardPage.vue -->
+      <!-- Replace the Quick Actions section in DashboardPage.vue -->
 
       <div class="section-title">Quick Actions</div>
       <div class="actions-grid">
         <button class="action-btn" @click="ui.openModal('addAnimal')">
-          <div class="ai ai-green">🐾</div> Add Animals
+          <div class="ai ai-green">🐾</div>
+          Add Animals
         </button>
         <button class="action-btn" @click="ui.openModal('addExpense')">
-          <div class="ai ai-amber">💰</div> Record Finance
+          <div class="ai ai-amber">💰</div>
+          Record Finance
         </button>
         <button class="action-btn" @click="ui.openModal('markPregnant')">
-          <div class="ai ai-purple">🐣</div> Mark Pregnant
+          <div class="ai ai-purple">🐣</div>
+          Mark Pregnant
         </button>
         <button class="action-btn" @click="ui.openModal('addHealth')">
-          <div class="ai ai-blue">💊</div> Health Reminder
+          <div class="ai ai-blue">💊</div>
+          Health Reminder
         </button>
         <button class="action-btn" @click="ui.openModal('logEggs')">
-          <div class="ai ai-amber">🥚</div> Log Eggs
+          <div class="ai ai-amber">🥚</div>
+          Log Eggs
         </button>
         <button class="action-btn" @click="ui.openModal('logHatch')">
-          <div class="ai ai-green">🐥</div> Record Hatch
+          <div class="ai ai-green">🐥</div>
+          Record Hatch
         </button>
         <button class="action-btn" @click="ui.openModal('sellAnimal')">
-          <div class="ai ai-amber">💰</div> Sell Animals
+          <div class="ai ai-amber">💰</div>
+          Sell Animals
         </button>
         <button class="action-btn" @click="ui.openModal('recordDeath')">
-          <div class="ai ai-red">💀</div> Record Death
+          <div class="ai ai-red">💀</div>
+          Record Death
         </button>
-
       </div>
-      <!-- FINANCE SUMMARY (replace the existing finance-card section in DashboardPage.vue) -->
+
       <div class="section-title">
         Finance Summary
         <RouterLink to="/finance" class="link">Details →</RouterLink>
       </div>
+
       <div class="finance-card card">
+        <div class="finance-row">
+          <span class="f-label">🐾 Animal Investment</span>
+          <span class="f-val asset">
+            ₱{{ finance.formatNum(finance.totalAnimalInvestment) }}
+          </span>
+        </div>
         <div class="finance-row">
           <span class="f-label">📥 Total Income</span>
           <span class="f-val positive"
@@ -158,15 +170,8 @@
             }}
           </span>
         </div>
-
-        <!-- Animal investment shown separately, clearly labeled as asset -->
-        <div class="finance-invest-row">
-          <span class="f-label-muted">🐾 Animal Investment (asset) </span>
-          <span class="f-val-muted"
-            >₱{{ finance.formatNum(finance.totalAnimalInvestment) }}</span
-          >
-        </div>
       </div>
+
       <!-- PREGNANCY TRACKER -->
       <template v-if="breedingStore.pregnanciesWithProgress.length">
         <div class="section-title">
@@ -181,25 +186,6 @@
           />
         </div>
       </template>
-
-      <!-- RECENT TRANSACTIONS -->
-      <div class="section-title">
-        Recent Transactions
-        <RouterLink to="/finance" class="link">All →</RouterLink>
-      </div>
-      <div class="card" v-if="finance.transactions.length">
-        <TransactionItem
-          v-for="t in finance.transactions.slice(0, 5)"
-          :key="t.id"
-          :transaction="t"
-        />
-      </div>
-      <div class="empty-state" v-else>
-        <div class="empty-state-icon">📝</div>
-        <div class="empty-state-text">
-          No transactions yet.<br />Tap "Record Finance" to add one.
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -209,18 +195,19 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import PageHeader from "@/components/PageHeader.vue";
 import PregnancyCard from "@/components/PregnancyCard.vue";
-import TransactionItem from "@/components/TransactionItem.vue";
 import { useAnimalStore } from "@/stores/animals";
 import { useFinanceStore } from "@/stores/finance";
 import { useBreedingStore } from "@/stores/breeding";
 import { useUIStore } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
+import { useHealthStore } from "@/stores/health"; // ← ADD THIS
 
 const animalStore = useAnimalStore();
 const finance = useFinanceStore();
 const breedingStore = useBreedingStore();
 const ui = useUIStore();
 const auth = useAuthStore();
+const healthStore = useHealthStore(); // ← ADD THIS
 const router = useRouter();
 
 const todayStr = new Date().toLocaleDateString("en-PH", {
@@ -243,13 +230,31 @@ async function handleLogout() {
   router.push("/login");
 }
 
-// Replace the allAlerts computed in DashboardPage.vue <script setup>
-
 const allAlerts = computed(() => {
   const a = [...breedingStore.alerts];
 
-  // Only warn about loss if operating activities are losing money
-  // (animal purchases excluded — they are investments, not losses)
+  // ── HEALTH ALERTS from health store ──
+  healthStore.activeAlerts.forEach((r) => {
+    const name =
+      r.treatmentType === "Custom" ? r.customTreatment : r.treatmentType;
+    const animal = r.animal;
+    let msg = "";
+    let type = "warn";
+
+    if (r.urgency === "overdue") {
+      type = "danger";
+      msg = `💊 <strong>${name}</strong> for <strong>${animal}</strong> is overdue by ${Math.abs(r.daysUntil)} day${Math.abs(r.daysUntil) !== 1 ? "s" : ""}.`;
+    } else if (r.urgency === "today") {
+      type = "warn";
+      msg = `💊 <strong>${name}</strong> for <strong>${animal}</strong> is due <strong>today</strong>.`;
+    } else if (r.urgency === "soon") {
+      type = "info";
+      msg = `💊 <strong>${name}</strong> for <strong>${animal}</strong> due in ${r.daysUntil} day${r.daysUntil !== 1 ? "s" : ""}.`;
+    }
+    if (msg) a.push({ type, msg });
+  });
+
+  // ── FINANCE ALERTS ──
   if (finance.profit < 0) {
     a.push({
       type: "danger",
@@ -257,13 +262,13 @@ const allAlerts = computed(() => {
     });
   }
 
-  // Warn if there are death losses this month
-  if (finance.deathLoss > 0) {
+  if ((finance.deathLoss ?? 0) > 0) {
     a.push({
       type: "warn",
       msg: `💀 Animal deaths have written off <strong>₱${finance.formatNum(finance.deathLoss)}</strong> in investment value.`,
     });
   }
+
   return a;
 });
 </script>

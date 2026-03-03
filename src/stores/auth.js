@@ -15,7 +15,19 @@ export const useAuthStore = defineStore("auth", () => {
 
   const isLoggedIn = computed(() => !!user.value);
 
-  // Listen for auth state changes (runs on app start)
+  // Resolves once Firebase has confirmed the initial auth state.
+  // The router guard awaits this before allowing any navigation,
+  // which prevents the 404 flash on page load / refresh.
+  const authReady = new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      user.value = firebaseUser;
+      loading.value = false;
+      resolve(firebaseUser);
+      unsub(); // unsubscribe after first resolution — the watcher below takes over
+    });
+  });
+
+  // Continuous listener for login/logout changes after initial load
   onAuthStateChanged(auth, (firebaseUser) => {
     user.value = firebaseUser;
     loading.value = false;
@@ -36,5 +48,5 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = null;
   }
 
-  return { user, loading, isLoggedIn, login, register, logout };
+  return { user, loading, isLoggedIn, authReady, login, register, logout };
 });

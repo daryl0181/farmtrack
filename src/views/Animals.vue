@@ -39,7 +39,7 @@
       </div>
 
       <!-- ── BATCHES LIST ── -->
-      <template v-if="activeFilter !== 'flagged'">
+      <template v-if="activeFilter !== 'flagged' && activeFilter !== 'sold'">
         <div v-if="filteredBatches.length" class="batch-list">
           <div
             class="batch-card card"
@@ -51,7 +51,7 @@
               <div class="batch-left">
                 <span class="batch-emoji">{{ animalStore.animalEmoji(batch.type) }}</span>
                 <div class="batch-title-group">
-                  <div class="batch-label">{{ batch.label || batch.type + ' Batch' }}</div>
+                  <div class="batch-label">{{ batch.label || batch.type }}</div>
                   <div class="batch-meta">
                     {{ animalStore.batchSexLabel(batch.sex) }} ·
                     Added {{ batch.addedDate }}
@@ -70,9 +70,9 @@
                 <span class="bs-icon">💰</span>
                 <span>₱{{ formatNum(batch.pricePerHead) }}/head</span>
               </div>
-              <div class="bs-pill">
-                <span class="bs-icon">📦</span>
-                <span>{{ batch.originalCount }} original</span>
+              <div class="bs-pill" v-if="batch.breed">
+                <span class="bs-icon">{{ batch.type === 'Goat' ? '🐐' : '🦆' }}</span>
+                <span>{{ batch.breed }}</span>
               </div>
               <div class="bs-pill" v-if="batch.totalSold">
                 <span class="bs-icon">💸</span>
@@ -175,7 +175,55 @@
         </div>
       </template>
 
-      <!-- SOLD HISTORY -->
+      <!-- ── SOLD / SALES HISTORY TAB ── -->
+      <template v-if="activeFilter === 'sold'">
+        <div class="section-title">
+          💰 All Sales
+          <span class="section-hint">Tap 🔄 to undo a sale and restore animals</span>
+        </div>
+
+        <div v-if="animalStore.soldBatches.length" class="sold-full-list">
+          <div class="sold-card card" v-for="s in animalStore.soldBatches" :key="s.id">
+            <div class="sc-top">
+              <span class="sc-emoji">{{ animalStore.animalEmoji(s.type) }}</span>
+              <div class="sc-info">
+                <div class="sc-label">{{ s.quantity }}× {{ s.batchLabel }}</div>
+                <div class="sc-meta">
+                  {{ s.soldDate }}{{ s.soldTo ? ' → ' + s.soldTo : '' }}
+                  <span v-if="s.sexSold && s.sexSold !== 'Mixed'"> · {{ s.sexSold }} only</span>
+                </div>
+              </div>
+              <div :class="['sc-profit', s.profit >= 0 ? 'pos' : 'neg']">
+                {{ s.profit >= 0 ? '+' : '' }}₱{{ formatNum(s.profit) }}
+              </div>
+            </div>
+
+            <div class="sc-prices">
+              <span>Cost: ₱{{ formatNum(s.costBasis) }}</span>
+              <span class="sc-arrow">→</span>
+              <span>Revenue: ₱{{ formatNum(s.totalRevenue) }}</span>
+              <span class="sc-pph">(₱{{ formatNum(s.pricePerHead) }}/head)</span>
+            </div>
+
+            <!-- UNDO BUTTON -->
+            <div class="sc-actions">
+              <button
+                class="undo-btn"
+                @click="openUndoConfirm(s)"
+              >
+                🔄 Undo Sale
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">💰</div>
+          <div class="empty-state-text">No sales yet.</div>
+        </div>
+      </template>
+
+      <!-- SOLD MINI PREVIEW (on All tab) -->
       <template v-if="activeFilter === 'All' && animalStore.soldBatches.length">
         <div class="section-title" style="margin-top:8px;">
           Recent Sales
@@ -195,38 +243,6 @@
         </div>
       </template>
 
-      <!-- FULL SOLD HISTORY TAB -->
-      <template v-if="activeFilter === 'sold'">
-        <div class="section-title">💰 All Sales</div>
-        <div v-if="animalStore.soldBatches.length" class="sold-full-list">
-          <div class="sold-card card" v-for="s in animalStore.soldBatches" :key="s.id">
-            <div class="sc-top">
-              <span class="sc-emoji">{{ animalStore.animalEmoji(s.type) }}</span>
-              <div class="sc-info">
-                <div class="sc-label">{{ s.quantity }}× {{ s.batchLabel }}</div>
-                <div class="sc-meta">
-                  {{ s.soldDate }}{{ s.soldTo ? ' → ' + s.soldTo : '' }}
-                  <span v-if="s.sexSold && s.sexSold !== 'Mixed'"> · {{ s.sexSold }} only</span>
-                </div>
-              </div>
-              <div :class="['sc-profit', s.profit >= 0 ? 'pos' : 'neg']">
-                {{ s.profit >= 0 ? '+' : '' }}₱{{ formatNum(s.profit) }}
-              </div>
-            </div>
-            <div class="sc-prices">
-              <span>Cost: ₱{{ formatNum(s.costBasis) }}</span>
-              <span class="sc-arrow">→</span>
-              <span>Revenue: ₱{{ formatNum(s.totalRevenue) }}</span>
-              <span class="sc-pph">(₱{{ formatNum(s.pricePerHead) }}/head)</span>
-            </div>
-          </div>
-        </div>
-        <div class="empty-state" v-else>
-          <div class="empty-state-icon">💰</div>
-          <div class="empty-state-text">No sales yet.</div>
-        </div>
-      </template>
-
     </div>
 
     <!-- ── SELL MODAL ── -->
@@ -241,7 +257,6 @@
             <span>₱{{ formatNum(sellTarget.pricePerHead) }}/head cost</span>
           </div>
 
-          <!-- SEX FILTER (only for mixed batches) -->
           <div class="form-group" v-if="sellTarget.sex === 'Mixed'">
             <label class="form-label">Selling which sex?</label>
             <div class="seg-ctrl">
@@ -253,7 +268,6 @@
             </div>
           </div>
 
-          <!-- QUANTITY -->
           <div class="form-group">
             <label class="form-label">How many to sell?</label>
             <div class="qty-row">
@@ -264,7 +278,6 @@
             <div class="qty-hint">Selling <strong>{{ sellForm.quantity }}</strong> of {{ sellTarget.currentCount }} — <strong>{{ sellTarget.currentCount - sellForm.quantity }}</strong> remaining</div>
           </div>
 
-          <!-- PRICE MODE -->
           <div class="form-group">
             <label class="form-label">Selling price</label>
             <div class="seg-ctrl">
@@ -280,7 +293,6 @@
             <input class="form-input" type="number" v-model.number="sellForm.price" placeholder="0" />
           </div>
 
-          <!-- PROFIT PREVIEW -->
           <div class="profit-preview" v-if="sellForm.price">
             <div class="pp-row">
               <span class="pp-label">Total Revenue</span>
@@ -497,7 +509,7 @@
       </div>
     </Transition>
 
-    <!-- ── DELETE CONFIRM ── -->
+    <!-- ── DELETE BATCH CONFIRM ── -->
     <Transition name="confirm">
       <div class="overlay confirm-overlay" v-if="deleteTarget" @click.self="deleteTarget = null">
         <div class="confirm-box">
@@ -509,6 +521,33 @@
           <div class="confirm-btns">
             <button class="btn-cancel" @click="deleteTarget = null">Cancel</button>
             <button class="btn-delete" @click="doDelete">Delete</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── UNDO SALE CONFIRM ── -->
+    <Transition name="confirm">
+      <div class="overlay confirm-overlay" v-if="undoTarget" @click.self="undoTarget = null">
+        <div class="confirm-box">
+          <div class="confirm-icon">🔄</div>
+          <div class="confirm-title">Undo This Sale?</div>
+          <div class="confirm-msg">
+            This will remove the sale of
+            <strong>{{ undoTarget?.quantity }}× {{ undoTarget?.batchLabel }}</strong>
+            and restore the animals back to the batch.
+            <br><br>
+            <span class="confirm-sub">
+              Sold on {{ undoTarget?.soldDate }}
+              {{ undoTarget?.soldTo ? '→ ' + undoTarget?.soldTo : '' }}
+              · Revenue ₱{{ formatNum(undoTarget?.totalRevenue) }}
+            </span>
+          </div>
+          <div class="confirm-btns">
+            <button class="btn-cancel" @click="undoTarget = null">Cancel</button>
+            <button class="btn-delete" @click="doUndoSale" :disabled="undoSaving">
+              {{ undoSaving ? 'Undoing…' : 'Undo Sale' }}
+            </button>
           </div>
         </div>
       </div>
@@ -539,9 +578,10 @@ const filters = [
 const activeFilter = ref('All')
 
 const filteredBatches = computed(() => {
-  if (activeFilter.value === 'All') return animalStore.batches
-  if (activeFilter.value === 'Goat') return animalStore.goatBatches
-  if (activeFilter.value === 'Duck') return animalStore.duckBatches
+  const active = (list) => list.filter((b) => (b.currentCount || 0) > 0)
+  if (activeFilter.value === 'All')  return active(animalStore.batches)
+  if (activeFilter.value === 'Goat') return active(animalStore.goatBatches)
+  if (activeFilter.value === 'Duck') return active(animalStore.duckBatches)
   return []
 })
 
@@ -561,6 +601,8 @@ function batchLabel(batchId) {
   const b = animalStore.batches.find(b => b.id === batchId)
   return b ? (b.label || b.type + ' Batch') : 'Unknown Batch'
 }
+
+function toggleExpand() {} // placeholder if you add expand later
 
 // ── SELL ──────────────────────────────────────────────────────────────────────
 const sellTarget = ref(null)
@@ -705,13 +747,36 @@ async function doEditFlagged() {
   editFlaggedTarget.value = null
 }
 
-// ── DELETE ────────────────────────────────────────────────────────────────────
+// ── DELETE BATCH ──────────────────────────────────────────────────────────────
 const deleteTarget = ref(null)
 function confirmDelete(batch) { deleteTarget.value = batch }
 async function doDelete() {
   await animalStore.removeBatch(deleteTarget.value.id)
   ui.showToast('🗑️ Batch removed')
   deleteTarget.value = null
+}
+
+// ── UNDO SALE ─────────────────────────────────────────────────────────────────
+const undoTarget = ref(null)
+const undoSaving = ref(false)
+
+function openUndoConfirm(sale) {
+  undoTarget.value = sale
+}
+
+async function doUndoSale() {
+  if (undoSaving.value) return
+  undoSaving.value = true
+  try {
+    await animalStore.removeSoldBatch(undoTarget.value)
+    ui.showToast(`🔄 Sale undone — ${undoTarget.value.quantity} ${undoTarget.value.type}s restored!`)
+    undoTarget.value = null
+  } catch (e) {
+    ui.showToast('⚠️ Failed to undo sale')
+    console.error(e)
+  } finally {
+    undoSaving.value = false
+  }
 }
 </script>
 
@@ -770,8 +835,7 @@ async function doDelete() {
 
 .cost-row {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 16px 0;
-  font-size: 12px;
+  padding: 10px 16px 0; font-size: 12px;
 }
 .cost-label { color: var(--muted); }
 .cost-val   { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text); }
@@ -779,8 +843,7 @@ async function doDelete() {
 /* FLAGGED STRIP */
 .flagged-strip {
   margin: 10px 16px 0;
-  background: var(--purple-pale); border-radius: 10px;
-  padding: 10px 12px;
+  background: var(--purple-pale); border-radius: 10px; padding: 10px 12px;
 }
 .flagged-title { font-size: 11px; font-weight: 700; color: var(--purple); margin-bottom: 8px; }
 .flagged-list  { display: flex; flex-direction: column; gap: 6px; }
@@ -792,14 +855,11 @@ async function doDelete() {
   cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
 }
 
-.batch-notes {
-  padding: 8px 16px 0; font-size: 12px; color: var(--muted);
-}
+.batch-notes { padding: 8px 16px 0; font-size: 12px; color: var(--muted); }
 
 /* BATCH ACTIONS */
 .batch-actions {
-  display: flex; gap: 6px; padding: 14px 16px;
-  flex-wrap: wrap;
+  display: flex; gap: 6px; padding: 14px 16px; flex-wrap: wrap;
 }
 .act-btn {
   padding: 7px 12px; border-radius: 8px;
@@ -813,6 +873,38 @@ async function doDelete() {
 .act-btn.flag   { background: var(--purple-pale); border-color: var(--purple); color: var(--purple); }
 .act-btn.edit   { background: var(--bg2);         border-color: var(--border); color: var(--muted); }
 .act-btn.delete { background: var(--bg2);         border-color: var(--border); color: var(--red); padding: 7px 10px; }
+
+/* SECTION HINT */
+.section-hint { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+/* SOLD FULL LIST */
+.sold-full-list { display: flex; flex-direction: column; gap: 10px; }
+.sold-card { padding: 14px 16px; }
+.sc-top    { display: flex; align-items: center; gap: 10px; }
+.sc-emoji  { font-size: 26px; flex-shrink: 0; }
+.sc-info   { flex: 1; }
+.sc-label  { font-weight: 600; font-size: 14px; }
+.sc-meta   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sc-profit { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; flex-shrink: 0; }
+.sc-profit.pos { color: var(--green); }
+.sc-profit.neg { color: var(--red); }
+.sc-prices {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bg2);
+  font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+}
+.sc-arrow { color: var(--green); font-weight: 700; }
+.sc-pph   { color: var(--muted); font-size: 10px; }
+
+/* UNDO BUTTON */
+.sc-actions { margin-top: 12px; }
+.undo-btn {
+  width: 100%; padding: 9px 14px; border-radius: 10px;
+  border: 1.5px solid var(--amber); background: var(--amber-pale); color: var(--amber);
+  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.undo-btn:active { background: var(--amber); color: #fff; }
 
 /* SOLD MINI */
 .section-link { font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; }
@@ -829,25 +921,6 @@ async function doDelete() {
 .sm-profit { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; }
 .sm-profit.pos { color: var(--green); }
 .sm-profit.neg { color: var(--red); }
-
-/* SOLD FULL */
-.sold-full-list { display: flex; flex-direction: column; gap: 10px; }
-.sold-card { padding: 14px 16px; }
-.sc-top    { display: flex; align-items: center; gap: 10px; }
-.sc-emoji  { font-size: 26px; }
-.sc-info   { flex: 1; }
-.sc-label  { font-weight: 600; font-size: 14px; }
-.sc-meta   { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.sc-profit { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
-.sc-profit.pos { color: var(--green); }
-.sc-profit.neg { color: var(--red); }
-.sc-prices {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bg2);
-  font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
-}
-.sc-arrow { color: var(--green); font-weight: 700; }
-.sc-pph   { color: var(--muted); font-size: 10px; }
 
 /* FLAGGED FULL */
 .flagged-full-list { display: flex; flex-direction: column; gap: 10px; }
@@ -872,13 +945,11 @@ async function doDelete() {
 .modal-sheet {
   background: var(--surface); border-radius: 24px 24px 0 0;
   width: 100%; max-width: 430px; margin: 0 auto;
-  padding: 16px 20px 40px;
-  max-height: 92vh; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 0;
+  padding: 16px 20px 40px; max-height: 92vh; overflow-y: auto;
 }
 .modal-handle {
   width: 40px; height: 4px; border-radius: 2px;
-  background: var(--border); margin: 0 auto 20px; flex-shrink: 0;
+  background: var(--border); margin: 0 auto 20px;
 }
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
 .modal-info-row {
@@ -918,7 +989,7 @@ async function doDelete() {
 /* PROFIT PREVIEW */
 .profit-preview {
   background: var(--bg2); border-radius: 10px; padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px;
 }
 .pp-row     { display: flex; justify-content: space-between; align-items: center; }
 .pp-label   { font-size: 12px; color: var(--muted); }
@@ -935,7 +1006,8 @@ async function doDelete() {
 }
 .confirm-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
 .confirm-title { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 6px; }
-.confirm-msg   { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; }
+.confirm-msg   { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; line-height: 1.6; }
+.confirm-sub   { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
 .confirm-btns  { display: flex; gap: 10px; }
 
 /* BUTTONS */
@@ -943,10 +1015,9 @@ async function doDelete() {
   width: 100%; padding: 14px; border-radius: 12px; border: none;
   background: var(--green); color: #fff; font-family: 'Outfit', sans-serif;
   font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px;
-  transition: opacity 0.15s;
 }
 .btn-full:disabled { opacity: 0.45; cursor: default; }
-.btn-full.danger   { background: var(--red); }
+.btn-full.danger { background: var(--red); }
 
 .btn-cancel {
   flex: 1; padding: 11px; border-radius: 10px;
@@ -964,9 +1035,9 @@ async function doDelete() {
   background: var(--red); font-family: 'Outfit', sans-serif;
   font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
 }
+.btn-delete:disabled { opacity: 0.5; }
 .edit-actions { display: flex; gap: 8px; margin-top: 8px; }
 
-/* OPTIONAL */
 .optional { font-size: 11px; color: var(--muted); font-weight: 400; }
 
 /* TRANSITIONS */

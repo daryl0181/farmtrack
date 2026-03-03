@@ -2,8 +2,16 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import {
-  collection, onSnapshot, addDoc, deleteDoc,
-  updateDoc, doc, query, orderBy,
+  collection,
+  onSnapshot,
+  addDoc,
+  deleteDoc,
+  updateDoc,
+  doc,
+  query,
+  orderBy,
+  getDocs,
+  where,
 } from "firebase/firestore";
 import { db } from "@/firebase";
 
@@ -11,17 +19,9 @@ import { db } from "@/firebase";
 export const GOAT_BREEDS = ["Anglo-Nubian", "Native"];
 export const DUCK_BREEDS = ["Native", "Indo"];
 
-/**
- * Compute offspring breed from two parents.
- * Returns a string like "50% Anglo-Nubian / 50% Native"
- * Supports percentage-based parents too.
- */
 export function computeOffspringBreed(parentA, parentB) {
-  // Parse breed percentages from a breed string
   function parseBreed(str) {
     if (!str) return {};
-    // e.g. "50% Anglo-Nubian / 50% Native" → { "Anglo-Nubian": 50, "Native": 50 }
-    // or "Anglo-Nubian" → { "Anglo-Nubian": 100 }
     const map = {};
     const parts = str.split("/").map((s) => s.trim());
     for (const part of parts) {
@@ -29,7 +29,6 @@ export function computeOffspringBreed(parentA, parentB) {
       if (m) {
         map[m[2].trim()] = Number(m[1]);
       } else {
-        // pure breed
         map[part] = 100;
       }
     }
@@ -47,7 +46,6 @@ export function computeOffspringBreed(parentA, parentB) {
     combined[breed] = (combined[breed] || 0) + pct / 2;
   }
 
-  // Format: "50% Anglo-Nubian / 50% Native"
   return Object.entries(combined)
     .filter(([, pct]) => pct > 0)
     .map(([breed, pct]) => `${Math.round(pct)}% ${breed}`)
@@ -55,153 +53,250 @@ export function computeOffspringBreed(parentA, parentB) {
 }
 
 export const useAnimalStore = defineStore("animals", () => {
-  const batches     = ref([]);
+  const batches = ref([]);
   const soldBatches = ref([]);
-  const flagged     = ref([]);
-  const eggRecords  = ref([]);   // daily egg production logs
-  const hatchRecords = ref([]); // hatch events
+  const flagged = ref([]);
+  const eggRecords = ref([]);
+  const hatchRecords = ref([]);
 
-  let unsubBatches = null, unsubSold = null, unsubFlagged = null;
-  let unsubEggs = null, unsubHatch = null;
+  // Tracks which Firestore collection each batch doc actually lives in.
+  // Handles the migration where old docs were written to "animalBatches"
+  // and new docs go into "batches".
+  const _batchColMap = ref({}); // { [docId]: "batches" | "animalBatches" }
+
+  let unsubBatches = null,
+    unsubBatches2 = null,
+    unsubSold = null;
+  let unsubFlagged = null,
+    unsubEggs = null,
+    unsubHatch = null;
 
   // ── LISTENERS ──────────────────────────────────────────────────────────────
   function startListener() {
+    // Merges docs from one collection into the batches ref,
+    // keeping docs from the other collection intact.
+    function makeMerger(colName) {
+      return (snap) => {
+        const incoming = snap.docs.map((d) => {
+          _batchColMap.value[d.id] = colName;
+          return { id: d.id, ...d.data() };
+        });
+        // Replace only the entries that came from this collection
+        const others = batches.value.filter(
+          (b) => _batchColMap.value[b.id] !== colName,
+        );
+        batches.value = [...others, ...incoming].sort((a, b) =>
+          (b.addedDate || "").localeCompare(a.addedDate || ""),
+        );
+      };
+    }
+
+    // Listen to BOTH collections so existing "animalBatches" docs still appear
     unsubBatches = onSnapshot(
       query(collection(db, "batches"), orderBy("addedDate", "desc")),
-      (snap) => { batches.value = snap.docs.map((d) => ({ id: d.id, ...d.data() })); },
+      makeMerger("batches"),
       (e) => console.error("[batches]", e.message),
+    );
+
+    unsubBatches2 = onSnapshot(
+      query(collection(db, "animalBatches"), orderBy("addedDate", "desc")),
+      makeMerger("animalBatches"),
+      (e) => console.error("[animalBatches]", e.message),
     );
 
     unsubSold = onSnapshot(
       query(collection(db, "soldBatches"), orderBy("soldDate", "desc")),
-      (snap) => { soldBatches.value = snap.docs.map((d) => ({ id: d.id, ...d.data() })); },
+      (snap) => {
+        soldBatches.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
       (e) => console.error("[soldBatches]", e.message),
     );
 
     unsubFlagged = onSnapshot(
       query(collection(db, "flaggedAnimals"), orderBy("flaggedDate", "desc")),
-      (snap) => { flagged.value = snap.docs.map((d) => ({ id: d.id, ...d.data() })); },
+      (snap) => {
+        flagged.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
       (e) => console.error("[flagged]", e.message),
     );
 
     unsubEggs = onSnapshot(
       query(collection(db, "eggRecords"), orderBy("date", "desc")),
-      (snap) => { eggRecords.value = snap.docs.map((d) => ({ id: d.id, ...d.data() })); },
+      (snap) => {
+        eggRecords.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
       (e) => console.error("[eggRecords]", e.message),
     );
 
     unsubHatch = onSnapshot(
       query(collection(db, "hatchRecords"), orderBy("hatchDate", "desc")),
-      (snap) => { hatchRecords.value = snap.docs.map((d) => ({ id: d.id, ...d.data() })); },
+      (snap) => {
+        hatchRecords.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
       (e) => console.error("[hatchRecords]", e.message),
     );
   }
 
   function stopListener() {
-    [unsubBatches, unsubSold, unsubFlagged, unsubEggs, unsubHatch]
-      .forEach((u) => u?.());
+    [
+      unsubBatches,
+      unsubBatches2,
+      unsubSold,
+      unsubFlagged,
+      unsubEggs,
+      unsubHatch,
+    ].forEach((u) => u?.());
+  }
+
+  // Returns the correct Firestore collection name for a given batch id
+  function _colFor(batchId) {
+    return _batchColMap.value[batchId] || "batches";
   }
 
   // ── BATCH ACTIONS ──────────────────────────────────────────────────────────
-  /**
-   * data: { label, type, breed, sex, count, pricePerHead, health, notes, addedDate }
-   * breed: e.g. "Anglo-Nubian", "Native", "50% Anglo-Nubian / 50% Native"
-   */
   async function addBatch(data) {
     const count = Number(data.count) || 1;
-    const pricePerHead = Number(data.pricePerHead) || 0;
-    await addDoc(collection(db, "batches"), {
-      label:         data.label || "",
-      type:          data.type || "Duck",
-      breed:         data.breed || (data.type === "Goat" ? "Native" : "Native"),
-      sex:           data.sex || "Female",
+    // All new batches go into "batches"
+    const docRef = await addDoc(collection(db, "batches"), {
+      type: data.type || "Goat",
+      breed: data.breed || "Native",
+      sex: data.sex || "Mixed",
+      label: data.label || "",
       originalCount: count,
-      currentCount:  count,
-      pricePerHead,
-      totalCost:     pricePerHead * count,
-      health:        data.health || "Healthy",
-      notes:         data.notes || "",
-      addedDate:     data.addedDate || new Date().toISOString().slice(0, 10),
-      totalSold:     0,
-      totalDied:     0,
-      // Duck-specific
-      totalEggsProduced: 0,
-      totalHatched:      0,
+      currentCount: count,
+      pricePerHead: Number(data.pricePerHead) || 0,
+      health: data.health || "Healthy",
+      addedDate: data.addedDate || new Date().toISOString().slice(0, 10),
+      notes: data.notes || "",
+      totalSold: 0,
+      totalDied: 0,
     });
+    _batchColMap.value[docRef.id] = "batches";
   }
 
   async function updateBatch(id, data) {
-    await updateDoc(doc(db, "batches", id), data);
+    await updateDoc(doc(db, _colFor(id), id), data);
   }
 
   async function removeBatch(id) {
-    await deleteDoc(doc(db, "batches", id));
+    await deleteDoc(doc(db, _colFor(id), id));
   }
 
-  async function removeSoldBatch(id) {
-    await deleteDoc(doc(db, "soldBatches", id));
-  }
-
-  async function sellFromBatch({ batchId, quantity, pricePerHead, soldTo, soldDate, sexSold }) {
+  // ── SELL ───────────────────────────────────────────────────────────────────
+  async function sellFromBatch({
+    batchId,
+    quantity,
+    pricePerHead,
+    soldTo,
+    soldDate,
+    sexSold,
+  }) {
     const batch = batches.value.find((b) => b.id === batchId);
     if (!batch) return;
-    const qty   = Number(quantity);
-    const pph   = Number(pricePerHead);
+
+    const qty = Number(quantity);
+    const pph = Number(pricePerHead);
     const total = qty * pph;
-    const costBasis = batch.pricePerHead * qty;
+    const costBasis = (Number(batch.pricePerHead) || 0) * qty;
     const today = soldDate || new Date().toISOString().slice(0, 10);
+    const col = _colFor(batchId); // ← correct collection for THIS batch
 
-    await addDoc(collection(db, "soldBatches"), {
-      batchId, batchLabel: batch.label || batch.type,
-      type: batch.type, breed: batch.breed || "",
-      sexSold: sexSold || batch.sex,
-      quantity: qty, pricePerHead: pph, totalRevenue: total,
-      costBasis, profit: total - costBasis,
-      soldTo: soldTo || "", soldDate: today,
-    });
-
-    await addDoc(collection(db, "transactions"), {
-      type: "Income", category: "Animal Sale",
+    // Create income transaction first so we can link its ID to the sale record
+    const txRef = await addDoc(collection(db, "transactions"), {
+      type: "Income",
+      category: "Animal Sale",
       amount: total,
       description: `Sold ${qty} ${batch.type}${batch.breed ? ` (${batch.breed})` : ""}${batch.label ? " from " + batch.label : ""}${soldTo ? " to " + soldTo : ""}`,
       date: today,
     });
 
-    await updateDoc(doc(db, "batches", batchId), {
-      currentCount: Math.max(0, batch.currentCount - qty),
-      totalSold: (batch.totalSold || 0) + qty,
+    await addDoc(collection(db, "soldBatches"), {
+      batchId,
+      batchLabel: batch.label || batch.type,
+      type: batch.type,
+      breed: batch.breed || "",
+      sexSold: sexSold || batch.sex,
+      quantity: qty,
+      pricePerHead: pph,
+      totalRevenue: total,
+      costBasis,
+      profit: total - costBasis,
+      soldTo: soldTo || "",
+      soldDate: today,
+      transactionId: txRef.id,
+    });
+
+    await updateDoc(doc(db, col, batchId), {
+      currentCount: Math.max(0, (Number(batch.currentCount) || 0) - qty),
+      totalSold: (Number(batch.totalSold) || 0) + qty,
     });
   }
 
+  // ── UNDO SALE ──────────────────────────────────────────────────────────────
+  async function removeSoldBatch(soldBatch) {
+    const qty = Number(soldBatch.quantity) || 0;
+    const sourceBatch = batches.value.find((b) => b.id === soldBatch.batchId);
+
+    // 1. Restore animal count on the source batch
+    if (sourceBatch) {
+      const col = _colFor(soldBatch.batchId);
+      await updateDoc(doc(db, col, soldBatch.batchId), {
+        currentCount: (Number(sourceBatch.currentCount) || 0) + qty,
+        totalSold: Math.max(0, (Number(sourceBatch.totalSold) || 0) - qty),
+      });
+    }
+
+    // 2. Delete the linked income transaction
+    //    - New sales: use stored transactionId (exact match)
+    //    - Old sales (no transactionId): query by amount + date + category
+    if (soldBatch.transactionId) {
+      await deleteDoc(doc(db, "transactions", soldBatch.transactionId));
+    } else {
+      // Fallback: find the matching Animal Sale transaction by amount and date
+      const q = query(
+        collection(db, "transactions"),
+        where("category", "==", "Animal Sale"),
+        where("amount", "==", Number(soldBatch.totalRevenue)),
+        where("date", "==", soldBatch.soldDate),
+      );
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(doc(db, "transactions", d.id));
+      }
+    }
+
+    // 3. Delete the sold record itself
+    await deleteDoc(doc(db, "soldBatches", soldBatch.id));
+  }
+
+  // ── DEATHS ─────────────────────────────────────────────────────────────────
   async function recordDeaths({ batchId, quantity, cause, date }) {
     const batch = batches.value.find((b) => b.id === batchId);
     if (!batch) return;
     const qty = Number(quantity);
-    await updateDoc(doc(db, "batches", batchId), {
-      currentCount:   Math.max(0, batch.currentCount - qty),
-      totalDied:      (batch.totalDied || 0) + qty,
+    const col = _colFor(batchId);
+    await updateDoc(doc(db, col, batchId), {
+      currentCount: Math.max(0, (Number(batch.currentCount) || 0) - qty),
+      totalDied: (Number(batch.totalDied) || 0) + qty,
       lastDeathCause: cause,
-      lastDeathDate:  date || new Date().toISOString().slice(0, 10),
+      lastDeathDate: date || new Date().toISOString().slice(0, 10),
     });
   }
 
   // ── EGG RECORDS ────────────────────────────────────────────────────────────
-  /**
-   * Log daily egg production for a duck batch.
-   * data: { batchId, date, eggsCollected, notes }
-   */
   async function addEggRecord(data) {
     await addDoc(collection(db, "eggRecords"), {
-      batchId:       data.batchId,
-      date:          data.date,
+      batchId: data.batchId,
+      date: data.date,
       eggsCollected: Number(data.eggsCollected) || 0,
-      notes:         data.notes || "",
+      notes: data.notes || "",
     });
-    // Update batch total
     const batch = batches.value.find((b) => b.id === data.batchId);
     if (batch) {
-      await updateDoc(doc(db, "batches", data.batchId), {
-        totalEggsProduced: (batch.totalEggsProduced || 0) + (Number(data.eggsCollected) || 0),
+      await updateDoc(doc(db, _colFor(data.batchId), data.batchId), {
+        totalEggsProduced:
+          (Number(batch.totalEggsProduced) || 0) +
+          (Number(data.eggsCollected) || 0),
       });
     }
   }
@@ -211,32 +306,29 @@ export const useAnimalStore = defineStore("animals", () => {
   }
 
   // ── HATCH RECORDS ──────────────────────────────────────────────────────────
-  /**
-   * Record a hatch event.
-   * data: { batchId, hatchDate, eggsSet, hatched, breed, notes }
-   * breed is auto-computed if parentBreeds provided
-   */
   async function addHatchRecord(data) {
-    const offspringBreed = data.fatherBreed && data.motherBreed
-      ? computeOffspringBreed(data.fatherBreed, data.motherBreed)
-      : (data.breed || "");
+    const offspringBreed =
+      data.fatherBreed && data.motherBreed
+        ? computeOffspringBreed(data.fatherBreed, data.motherBreed)
+        : data.breed || "";
 
     await addDoc(collection(db, "hatchRecords"), {
-      batchId:        data.batchId,
-      hatchDate:      data.hatchDate,
-      eggsSet:        Number(data.eggsSet) || 0,
-      hatched:        Number(data.hatched) || 0,
-      failedToHatch:  (Number(data.eggsSet) || 0) - (Number(data.hatched) || 0),
+      batchId: data.batchId,
+      hatchDate: data.hatchDate,
+      eggsSet: Number(data.eggsSet) || 0,
+      hatched: Number(data.hatched) || 0,
+      failedToHatch: (Number(data.eggsSet) || 0) - (Number(data.hatched) || 0),
       offspringBreed,
-      fatherBreed:    data.fatherBreed || "",
-      motherBreed:    data.motherBreed || "",
-      notes:          data.notes || "",
+      fatherBreed: data.fatherBreed || "",
+      motherBreed: data.motherBreed || "",
+      notes: data.notes || "",
     });
 
     const batch = batches.value.find((b) => b.id === data.batchId);
     if (batch) {
-      await updateDoc(doc(db, "batches", data.batchId), {
-        totalHatched: (batch.totalHatched || 0) + (Number(data.hatched) || 0),
+      await updateDoc(doc(db, _colFor(data.batchId), data.batchId), {
+        totalHatched:
+          (Number(batch.totalHatched) || 0) + (Number(data.hatched) || 0),
       });
     }
   }
@@ -262,28 +354,42 @@ export const useAnimalStore = defineStore("animals", () => {
   }
 
   // ── COMPUTED ───────────────────────────────────────────────────────────────
-  const goatBatches = computed(() => batches.value.filter((b) => b.type === "Goat"));
-  const duckBatches = computed(() => batches.value.filter((b) => b.type === "Duck"));
+  const goatBatches = computed(() =>
+    batches.value.filter((b) => b.type === "Goat"),
+  );
+  const duckBatches = computed(() =>
+    batches.value.filter((b) => b.type === "Duck"),
+  );
 
-  const totalGoats   = computed(() => goatBatches.value.reduce((s, b) => s + (b.currentCount || 0), 0));
-  const totalDucks   = computed(() => duckBatches.value.reduce((s, b) => s + (b.currentCount || 0), 0));
+  const totalGoats = computed(() =>
+    goatBatches.value.reduce((s, b) => s + (b.currentCount || 0), 0),
+  );
+  const totalDucks = computed(() =>
+    duckBatches.value.reduce((s, b) => s + (b.currentCount || 0), 0),
+  );
   const totalAnimals = computed(() => totalGoats.value + totalDucks.value);
 
-  // Sex counts
   const maleGoats = computed(() =>
-    goatBatches.value.filter((b) => b.sex === "Male").reduce((s, b) => s + (b.currentCount || 0), 0)
+    goatBatches.value
+      .filter((b) => b.sex === "Male")
+      .reduce((s, b) => s + (b.currentCount || 0), 0),
   );
   const femaleGoats = computed(() =>
-    goatBatches.value.filter((b) => b.sex === "Female").reduce((s, b) => s + (b.currentCount || 0), 0)
+    goatBatches.value
+      .filter((b) => b.sex === "Female")
+      .reduce((s, b) => s + (b.currentCount || 0), 0),
   );
   const maleDucks = computed(() =>
-    duckBatches.value.filter((b) => b.sex === "Male").reduce((s, b) => s + (b.currentCount || 0), 0)
+    duckBatches.value
+      .filter((b) => b.sex === "Male")
+      .reduce((s, b) => s + (b.currentCount || 0), 0),
   );
   const femaleDucks = computed(() =>
-    duckBatches.value.filter((b) => b.sex === "Female").reduce((s, b) => s + (b.currentCount || 0), 0)
+    duckBatches.value
+      .filter((b) => b.sex === "Female")
+      .reduce((s, b) => s + (b.currentCount || 0), 0),
   );
 
-  // Breed breakdowns
   const goatByBreed = computed(() => {
     const map = {};
     goatBatches.value.forEach((b) => {
@@ -301,12 +407,11 @@ export const useAnimalStore = defineStore("animals", () => {
     return map;
   });
 
-  // Egg stats
   const totalEggsProduced = computed(() =>
-    eggRecords.value.reduce((s, r) => s + (r.eggsCollected || 0), 0)
+    eggRecords.value.reduce((s, r) => s + (r.eggsCollected || 0), 0),
   );
   const totalHatched = computed(() =>
-    hatchRecords.value.reduce((s, r) => s + (r.hatched || 0), 0)
+    hatchRecords.value.reduce((s, r) => s + (r.hatched || 0), 0),
   );
   const eggsByBatch = computed(() => {
     const map = {};
@@ -326,17 +431,19 @@ export const useAnimalStore = defineStore("animals", () => {
   });
 
   const pregnantGoatNames = computed(() =>
-    flagged.value.filter((f) => f.health === "Pregnant").map((f) => f.name)
+    flagged.value.filter((f) => f.health === "Pregnant").map((f) => f.name),
   );
 
   const totalAnimalCosts = computed(() =>
     batches.value.reduce(
-      (s, b) => s + (Number(b.pricePerHead) || 0) * (Number(b.originalCount) || 0), 0,
-    )
+      (s, b) =>
+        s + (Number(b.pricePerHead) || 0) * (Number(b.originalCount) || 0),
+      0,
+    ),
   );
 
   const totalSaleProfit = computed(() =>
-    soldBatches.value.reduce((s, s2) => s + (Number(s2.profit) || 0), 0)
+    soldBatches.value.reduce((s, s2) => s + (Number(s2.profit) || 0), 0),
   );
 
   const byType = computed(() => {
@@ -350,10 +457,19 @@ export const useAnimalStore = defineStore("animals", () => {
   });
 
   // ── HELPERS ────────────────────────────────────────────────────────────────
-  function animalEmoji(type) { return { Goat: "🐐", Duck: "🦆" }[type] ?? "🐾"; }
+  function animalEmoji(type) {
+    return { Goat: "🐐", Duck: "🦆" }[type] ?? "🐾";
+  }
 
   function healthTagColor(health) {
-    return { Healthy: "green", Pregnant: "purple", Sick: "red", "Under Treatment": "amber" }[health] ?? "green";
+    return (
+      {
+        Healthy: "green",
+        Pregnant: "purple",
+        Sick: "red",
+        "Under Treatment": "amber",
+      }[health] ?? "green"
+    );
   }
 
   function batchSexLabel(sex) {
@@ -362,27 +478,54 @@ export const useAnimalStore = defineStore("animals", () => {
 
   function breedLabel(type, breed) {
     if (!breed) return "";
-    // If it already has %, it's a crossbreed — show it shortened
     if (breed.includes("%")) return "🔀 " + breed;
     const icons = { "Anglo-Nubian": "🐐", Native: "🌿", Indo: "🦆" };
     return (icons[breed] ?? "") + " " + breed;
   }
 
   return {
-    batches, soldBatches, flagged, eggRecords, hatchRecords,
-    goatBatches, duckBatches,
-    totalGoats, totalDucks, totalAnimals,
-    maleGoats, femaleGoats, maleDucks, femaleDucks,
-    goatByBreed, duckByBreed,
-    totalEggsProduced, totalHatched, eggsByBatch,
-    flaggedByBatch, pregnantGoatNames,
-    totalAnimalCosts, totalSaleProfit, byType,
-    startListener, stopListener,
-    addBatch, updateBatch, removeBatch, removeSoldBatch,
-    sellFromBatch, recordDeaths,
-    addEggRecord, removeEggRecord,
-    addHatchRecord, removeHatchRecord,
-    flagIndividual, updateFlagged, removeFlagged,
-    animalEmoji, healthTagColor, batchSexLabel, breedLabel,
+    batches,
+    soldBatches,
+    flagged,
+    eggRecords,
+    hatchRecords,
+    goatBatches,
+    duckBatches,
+    totalGoats,
+    totalDucks,
+    totalAnimals,
+    maleGoats,
+    femaleGoats,
+    maleDucks,
+    femaleDucks,
+    goatByBreed,
+    duckByBreed,
+    totalEggsProduced,
+    totalHatched,
+    eggsByBatch,
+    flaggedByBatch,
+    pregnantGoatNames,
+    totalAnimalCosts,
+    totalSaleProfit,
+    byType,
+    startListener,
+    stopListener,
+    addBatch,
+    updateBatch,
+    removeBatch,
+    removeSoldBatch,
+    sellFromBatch,
+    recordDeaths,
+    addEggRecord,
+    removeEggRecord,
+    addHatchRecord,
+    removeHatchRecord,
+    flagIndividual,
+    updateFlagged,
+    removeFlagged,
+    animalEmoji,
+    healthTagColor,
+    batchSexLabel,
+    breedLabel,
   };
 });

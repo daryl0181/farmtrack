@@ -7,7 +7,6 @@
           <span class="header-pill duck">🥚 {{ animalStore.totalEggsProduced }} eggs</span>
         </div>
       </template>
-      <!-- SUMMARY STATS -->
       <div class="header-stats cols-4">
         <div class="header-stat">
           <div class="header-stat-val">{{ breedingStore.pregnancyCount }}</div>
@@ -45,7 +44,6 @@
       <!-- ═══════════════════════════════════════════════════════════ -->
       <template v-if="activeTab === 'goats'">
 
-        <!-- SUB-TABS -->
         <div class="sub-tabs">
           <button :class="['sub-tab', goatSub === 'pregnancies' ? 'active' : '']" @click="goatSub = 'pregnancies'">
             Pregnancies
@@ -64,71 +62,13 @@
         <!-- PREGNANCIES -->
         <template v-if="goatSub === 'pregnancies'">
           <div v-if="breedingStore.pregnanciesWithProgress.length" class="preg-list">
-            <div class="breed-card card" v-for="p in breedingStore.pregnanciesWithProgress" :key="p.id">
-              <div class="breed-header">
-                <div class="breed-title">
-                  🐐 {{ p.goatName }}
-                  <span class="breed-tag" v-if="p.offspringBreed">{{ p.offspringBreed }}</span>
-                </div>
-                <span :class="['tag', p.daysLeft <= 14 ? 'amber' : 'green']">{{ p.daysLeft }}d</span>
-              </div>
-
-              <div class="breed-grid">
-                <div class="breed-stat">
-                  <div class="bs-val">{{ p.mateDate }}</div>
-                  <div class="bs-label">Mated</div>
-                </div>
-                <div class="breed-stat">
-                  <div class="bs-val">{{ p.expectedBirth }}</div>
-                  <div class="bs-label">Expected Birth</div>
-                </div>
-                <div class="breed-stat">
-                  <div class="bs-val">{{ p.expectedKids }}</div>
-                  <div class="bs-label">Expected Kids</div>
-                </div>
-                <div class="breed-stat">
-                  <div class="bs-val">{{ Math.round(p.progress) }}%</div>
-                  <div class="bs-label">Progress</div>
-                </div>
-              </div>
-
-              <!-- PROGRESS BAR -->
-              <div class="prog-track">
-                <div class="prog-fill"
-                  :style="{ width: p.progress + '%', background: p.daysLeft <= 14 ? 'var(--amber)' : 'var(--green)' }" />
-              </div>
-
-              <!-- TIMELINE -->
-              <div class="timeline">
-                <div class="tl-row">
-                  <div class="tl-dot done" />
-                  <div class="tl-label">Mating recorded</div>
-                  <div class="tl-date">{{ p.mateDate }}</div>
-                </div>
-                <div class="tl-row">
-                  <div :class="['tl-dot', p.progress > 50 ? 'done' : 'pending']" />
-                  <div class="tl-label">Mid-term check (75 days)</div>
-                  <div class="tl-date">{{ p.midDate }}</div>
-                </div>
-                <div class="tl-row">
-                  <div class="tl-dot pending" />
-                  <div class="tl-label">Expected birth</div>
-                  <div class="tl-date">{{ p.expectedBirth }}</div>
-                </div>
-              </div>
-
-              <!-- OFFSPRING BREED INFO -->
-              <div class="offspring-box" v-if="p.offspringBreed">
-                🧬 Offspring breed: <strong>{{ p.offspringBreed }}</strong>
-              </div>
-
-              <div class="breed-actions">
-                <button class="breed-action-btn birth" @click="openBirth(p)">🐣 Record Birth</button>
-                <button class="breed-action-btn remove" @click="breedingStore.removePregnancy(p.id)">Remove</button>
-              </div>
-            </div>
+            <PregnancyItem
+              v-for="p in breedingStore.pregnanciesWithProgress"
+              :key="p.id"
+              :pregnancy="p"
+              @record-birth="openBirth"
+            />
           </div>
-
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🐐</div>
             <div class="empty-state-text">No active pregnancies.<br>Tap + to track a pregnancy.</div>
@@ -138,24 +78,11 @@
         <!-- BIRTH RECORDS -->
         <template v-if="goatSub === 'births'">
           <div v-if="breedingStore.birthRecords.length" class="births-list">
-            <div class="birth-card card" v-for="b in breedingStore.birthRecords" :key="b.id">
-              <div class="bc-top">
-                <div class="bc-icon">🐣</div>
-                <div class="bc-info">
-                  <div class="bc-name">{{ b.goatName }} gave birth</div>
-                  <div class="bc-meta">{{ b.birthDate }}</div>
-                  <div class="bc-breed" v-if="b.offspringBreed">
-                    🧬 {{ b.offspringBreed }}
-                  </div>
-                </div>
-                <span class="tag green">Done ✓</span>
-              </div>
-              <div class="bc-kids">
-                <div class="kid-pill male">♂ {{ b.maleKids }} male</div>
-                <div class="kid-pill female">♀ {{ b.femaleKids }} female</div>
-                <div class="kid-pill total">{{ b.kidsCount }} total</div>
-              </div>
-            </div>
+            <BirthRecordCard
+              v-for="b in breedingStore.birthRecords"
+              :key="b.id"
+              :record="b"
+            />
           </div>
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🐣</div>
@@ -170,7 +97,6 @@
       <!-- ═══════════════════════════════════════════════════════════ -->
       <template v-if="activeTab === 'ducks'">
 
-        <!-- SUB-TABS -->
         <div class="sub-tabs">
           <button :class="['sub-tab', duckSub === 'eggs' ? 'active' : '']" @click="duckSub = 'eggs'">
             🥚 Eggs
@@ -182,10 +108,8 @@
           </button>
         </div>
 
-        <!-- EGGS SUB-TAB -->
+        <!-- EGGS -->
         <template v-if="duckSub === 'eggs'">
-
-          <!-- EGG SUMMARY CARDS (per flock) -->
           <div class="section-title">Egg Production by Flock</div>
           <div class="flock-egg-grid" v-if="animalStore.duckBatches.length">
             <div class="flock-egg-card card" v-for="b in animalStore.duckBatches" :key="b.id">
@@ -213,15 +137,12 @@
             </div>
           </div>
 
-          <!-- LOG BUTTON -->
           <button class="log-eggs-btn" @click="ui.openModal('logEggs')">🥚 Log Today's Eggs</button>
 
-          <!-- EGG RECORDS LIST -->
           <div class="section-title" style="margin-top:20px;">
             All Egg Records
             <span class="total-eggs-badge">{{ animalStore.totalEggsProduced }} total eggs</span>
           </div>
-
           <div class="egg-list" v-if="animalStore.eggRecords.length">
             <div class="egg-item card" v-for="r in animalStore.eggRecords" :key="r.id">
               <div class="ei-icon">🥚</div>
@@ -243,10 +164,8 @@
           </div>
         </template>
 
-        <!-- HATCH & CHICKS SUB-TAB -->
+        <!-- HATCH -->
         <template v-if="duckSub === 'hatch'">
-
-          <!-- HATCH SUMMARY -->
           <div class="hatch-summary-grid">
             <div class="hatch-sum-card card">
               <div class="hs-val">{{ totalEggsSet }}</div>
@@ -264,10 +183,8 @@
             </div>
           </div>
 
-          <!-- LOG BUTTON -->
           <button class="log-eggs-btn green" @click="ui.openModal('logHatch')">🐥 Record a Hatch</button>
 
-          <!-- HATCH RECORDS -->
           <div class="section-title" style="margin-top:20px;">All Hatch Records</div>
           <div class="hatch-list" v-if="animalStore.hatchRecords.length">
             <div class="hatch-card card" v-for="h in animalStore.hatchRecords" :key="h.id">
@@ -276,43 +193,25 @@
                 <div class="hc-info">
                   <div class="hc-flock">{{ flockLabel(h.batchId) }}</div>
                   <div class="hc-date">{{ h.hatchDate }}</div>
-                  <!-- OFFSPRING BREED -->
-                  <div class="hc-breed" v-if="h.offspringBreed">
-                    🧬 {{ h.offspringBreed }}
-                  </div>
+                  <div class="hc-breed" v-if="h.offspringBreed">🧬 {{ h.offspringBreed }}</div>
                   <div class="hc-parents" v-if="h.fatherBreed && h.motherBreed">
                     ♀ {{ h.motherBreed }} × ♂ {{ h.fatherBreed }}
                   </div>
                 </div>
-                <!-- HATCH RATE RING -->
                 <div class="hc-rate-wrap">
-                  <div class="hc-rate"
-                    :style="{ color: hatchRateOf(h) >= 70 ? 'var(--green)' : hatchRateOf(h) >= 40 ? 'var(--amber)' : 'var(--red)' }">
+                  <div class="hc-rate" :style="{ color: hatchRateOf(h) >= 70 ? 'var(--green)' : hatchRateOf(h) >= 40 ? 'var(--amber)' : 'var(--red)' }">
                     {{ hatchRateOf(h) }}%
                   </div>
                   <div class="hc-rate-label">hatch rate</div>
                 </div>
               </div>
-
-              <!-- EGG STATS -->
               <div class="hc-stats">
-                <div class="hc-stat">
-                  <span class="hcs-icon">🥚</span>
-                  <span>{{ h.eggsSet }} set</span>
-                </div>
+                <div class="hc-stat"><span class="hcs-icon">🥚</span><span>{{ h.eggsSet }} set</span></div>
                 <span class="hcs-arrow">→</span>
-                <div class="hc-stat success">
-                  <span class="hcs-icon">🐥</span>
-                  <span>{{ h.hatched }} hatched</span>
-                </div>
-                <div class="hc-stat fail" v-if="h.failedToHatch > 0">
-                  <span class="hcs-icon">❌</span>
-                  <span>{{ h.failedToHatch }} failed</span>
-                </div>
+                <div class="hc-stat success"><span class="hcs-icon">🐥</span><span>{{ h.hatched }} hatched</span></div>
+                <div class="hc-stat fail" v-if="h.failedToHatch > 0"><span class="hcs-icon">❌</span><span>{{ h.failedToHatch }} failed</span></div>
               </div>
-
               <div class="hc-notes" v-if="h.notes">{{ h.notes }}</div>
-
               <button class="hc-del" @click="animalStore.removeHatchRecord(h.id)">🗑️ Remove</button>
             </div>
           </div>
@@ -323,10 +222,9 @@
         </template>
 
       </template>
-
     </div>
 
-    <!-- ── RECORD BIRTH MODAL ── -->
+    <!-- RECORD BIRTH MODAL -->
     <Transition name="modal-slide">
       <div class="overlay" v-if="birthTarget" @click.self="birthTarget = null">
         <div class="modal-sheet">
@@ -336,12 +234,10 @@
             <span>🐐 {{ birthTarget.goatName }}</span>
             <span>{{ birthTarget.expectedKids }} expected</span>
           </div>
-
           <div class="form-group">
             <label class="form-label">Birth Date</label>
             <input class="form-input" type="date" v-model="birthForm.birthDate" />
           </div>
-
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">♂ Male Kids</label>
@@ -360,16 +256,12 @@
               </div>
             </div>
           </div>
-
-          <!-- OFFSPRING BREED -->
           <div class="offspring-preview" v-if="birthTarget.offspringBreed">
             🧬 These kids will be: <strong>{{ birthTarget.offspringBreed }}</strong>
           </div>
-
           <div class="total-kids-row" v-if="birthForm.maleKids + birthForm.femaleKids > 0">
             🐐 {{ birthForm.maleKids + birthForm.femaleKids }} kid{{ birthForm.maleKids + birthForm.femaleKids > 1 ? 's' : '' }} born
           </div>
-
           <button class="btn-full" @click="doBirth" :disabled="birthForm.maleKids + birthForm.femaleKids === 0">
             Confirm Birth
           </button>
@@ -377,14 +269,15 @@
       </div>
     </Transition>
 
-    <!-- FAB: context-aware -->
     <button class="fab" @click="onFab">+</button>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import PageHeader from '@/components/PageHeader.vue'
+import PageHeader    from '@/components/PageHeader.vue'
+import PregnancyItem    from '@/components/PregnancyCard.vue'
+import BirthRecordCard from '@/components/BirthRecordCard.vue'
 import { useBreedingStore } from '@/stores/breeding'
 import { useAnimalStore }   from '@/stores/animals'
 import { useUIStore }       from '@/stores/ui'
@@ -394,12 +287,10 @@ const animalStore   = useAnimalStore()
 const ui            = useUIStore()
 const today         = new Date().toISOString().slice(0, 10)
 
-// TABS
 const activeTab = ref('goats')
 const goatSub   = ref('pregnancies')
 const duckSub   = ref('eggs')
 
-// FAB action depends on which tab you're on
 function onFab() {
   if (activeTab.value === 'goats') {
     ui.openModal('markPregnant')
@@ -410,7 +301,6 @@ function onFab() {
   }
 }
 
-// ── HELPERS ────────────────────────────────────────────────────────────────
 function flockLabel(batchId) {
   const b = animalStore.duckBatches.find(b => b.id === batchId)
   return b ? (b.label || (b.breed || 'Duck') + ' Flock') : 'Unknown Flock'
@@ -421,7 +311,6 @@ function hatchRateOf(h) {
   return Math.round((h.hatched / h.eggsSet) * 100)
 }
 
-// Per-batch egg records
 function eggRecordsForBatch(batchId) {
   return animalStore.eggRecords.filter(r => r.batchId === batchId)
 }
@@ -436,10 +325,9 @@ function avgLayRateForBatch(batch) {
 function lastEggDateForBatch(batchId) {
   const recs = eggRecordsForBatch(batchId)
   if (!recs.length) return '—'
-  return recs[0].date  // already ordered desc from Firestore
+  return recs[0].date
 }
 
-// Overall hatch stats
 const totalEggsSet = computed(() =>
   animalStore.hatchRecords.reduce((s, h) => s + (h.eggsSet || 0), 0)
 )
@@ -448,7 +336,7 @@ const overallHatchRate = computed(() => {
   return Math.round((animalStore.totalHatched / totalEggsSet.value) * 100)
 })
 
-// ── BIRTH RECORDING ────────────────────────────────────────────────────────
+// Birth modal — opened by PregnancyItem emitting 'record-birth'
 const birthTarget = ref(null)
 const birthForm   = reactive({ birthDate: today, maleKids: 0, femaleKids: 0 })
 
@@ -461,10 +349,10 @@ async function doBirth() {
   const total = birthForm.maleKids + birthForm.femaleKids
   if (!total) return
   await breedingStore.recordBirth({
-    pregnancyId:   birthTarget.value.id,
-    birthDate:     birthForm.birthDate,
-    maleKids:      birthForm.maleKids,
-    femaleKids:    birthForm.femaleKids,
+    pregnancyId:    birthTarget.value.id,
+    birthDate:      birthForm.birthDate,
+    maleKids:       birthForm.maleKids,
+    femaleKids:     birthForm.femaleKids,
     offspringBreed: birthTarget.value.offspringBreed || '',
   })
   ui.showToast(`🐣 ${total} kid${total > 1 ? 's' : ''} born!`)
@@ -473,7 +361,6 @@ async function doBirth() {
 </script>
 
 <style scoped>
-/* HEADER */
 .header-pills { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; align-items: flex-end; }
 .header-pill  { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
 .header-pill.goat { background: rgba(255,255,255,0.15); color: #fff; }
@@ -482,7 +369,6 @@ async function doBirth() {
 .cols-4 .header-stat-val   { font-size: 16px; }
 .cols-4 .header-stat-label { font-size: 9px; }
 
-/* MAIN TABS */
 .main-tabs {
   display: flex; background: var(--bg2); border-radius: 14px;
   padding: 4px; gap: 4px; margin-bottom: 16px;
@@ -495,10 +381,7 @@ async function doBirth() {
 }
 .main-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 
-/* SUB TABS */
-.sub-tabs {
-  display: flex; gap: 6px; margin-bottom: 16px;
-}
+.sub-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
 .sub-tab {
   flex: 1; padding: 9px 12px; border-radius: 10px; border: none;
   font-size: 12px; font-weight: 600; cursor: pointer;
@@ -507,56 +390,12 @@ async function doBirth() {
   display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .sub-tab.active { background: var(--green); color: #fff; }
-.sub-count {
-  background: rgba(255,255,255,0.25); border-radius: 8px;
-  font-size: 10px; font-weight: 700; padding: 1px 5px;
-}
+.sub-count { background: rgba(255,255,255,0.25); border-radius: 8px; font-size: 10px; font-weight: 700; padding: 1px 5px; }
 .sub-tab:not(.active) .sub-count { background: var(--border); color: var(--muted); }
 
-/* PREGNANCY CARDS */
-.preg-list { display: flex; flex-direction: column; gap: 14px; }
-.breed-card { padding: 18px; }
-.breed-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
-.breed-title  { font-weight: 700; font-size: 16px; flex: 1; }
-.breed-tag {
-  display: block; font-size: 10px; color: var(--purple); font-weight: 500;
-  margin-top: 3px; background: var(--purple-pale); padding: 2px 7px; border-radius: 6px; width: fit-content;
-}
-
-.breed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.breed-stat { background: var(--bg2); border-radius: 10px; padding: 12px; }
-.bs-val   { font-size: 14px; font-weight: 700; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-.bs-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
-
-.prog-track {
-  height: 8px; border-radius: 4px; background: var(--bg2); overflow: hidden; margin-top: 14px;
-}
-.prog-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
-
-.timeline { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bg2); display: flex; flex-direction: column; gap: 10px; }
-.tl-row   { display: flex; align-items: center; gap: 10px; }
-.tl-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.tl-dot.done    { background: var(--green); }
-.tl-dot.pending { border: 2px solid var(--muted); }
-.tl-label { flex: 1; font-size: 12px; color: var(--muted); }
-.tl-date  { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text); }
-
-.offspring-box {
-  margin-top: 12px; background: var(--purple-pale); border-radius: 10px;
-  padding: 10px 12px; font-size: 12px; color: var(--purple);
-}
-
-.breed-actions { display: flex; gap: 8px; margin-top: 14px; }
-.breed-action-btn {
-  padding: 9px 14px; border-radius: 10px;
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
-  cursor: pointer; border: 1.5px solid; transition: all 0.15s;
-}
-.breed-action-btn.birth  { flex: 1; background: var(--green-pale); border-color: var(--green); color: var(--green); }
-.breed-action-btn.remove { background: var(--bg2); border-color: var(--border); color: var(--muted); font-size: 12px; }
-
-/* BIRTH CARDS */
+.preg-list   { display: flex; flex-direction: column; gap: 12px; }
 .births-list { display: flex; flex-direction: column; gap: 10px; }
+
 .birth-card { padding: 16px; }
 .bc-top  { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .bc-icon { font-size: 26px; }
@@ -564,16 +403,12 @@ async function doBirth() {
 .bc-name { font-weight: 700; font-size: 14px; }
 .bc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
 .bc-breed { font-size: 11px; color: var(--purple); margin-top: 3px; }
-
 .bc-kids { display: flex; gap: 6px; }
-.kid-pill {
-  padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 600;
-}
+.kid-pill { padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; }
 .kid-pill.male   { background: var(--blue-pale);   color: var(--blue); }
 .kid-pill.female { background: var(--purple-pale);  color: var(--purple); }
 .kid-pill.total  { background: var(--bg2); color: var(--muted); }
 
-/* FLOCK EGG GRID */
 .flock-egg-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .flock-egg-card { padding: 14px 16px; }
 .fec-top   { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -586,7 +421,6 @@ async function doBirth() {
 .fec-val   { font-size: 18px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .fec-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
-/* LOG BUTTON */
 .log-eggs-btn {
   width: 100%; padding: 13px; border-radius: 12px; border: none;
   background: #1d6fa5; color: #fff;
@@ -601,11 +435,8 @@ async function doBirth() {
   background: var(--green-pale); padding: 3px 8px; border-radius: 8px; margin-left: 4px;
 }
 
-/* EGG LIST */
 .egg-list { display: flex; flex-direction: column; gap: 8px; }
-.egg-item {
-  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-}
+.egg-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 .ei-icon  { font-size: 22px; flex-shrink: 0; }
 .ei-info  { flex: 1; }
 .ei-flock { font-weight: 600; font-size: 14px; }
@@ -617,32 +448,36 @@ async function doBirth() {
 .ei-del {
   width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
   background: transparent; font-size: 16px; color: var(--muted);
-  cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .ei-del:active { background: var(--red-pale); color: var(--red); }
 
-/* HATCH SUMMARY */
+.bc-del {
+  margin-top: 10px; padding: 7px 12px; border-radius: 8px;
+  border: 1.5px solid var(--border); background: var(--bg2); color: var(--red);
+  font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.bc-del:active { background: var(--red); color: #fff; border-color: var(--red); }
+
 .hatch-summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .hatch-sum-card { padding: 14px; text-align: center; }
 .hs-val   { font-size: 24px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
 .hs-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-/* HATCH LIST */
 .hatch-list { display: flex; flex-direction: column; gap: 12px; }
 .hatch-card { padding: 16px; }
 .hc-top  { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .hc-icon { font-size: 28px; flex-shrink: 0; }
 .hc-info { flex: 1; }
-.hc-flock  { font-weight: 700; font-size: 14px; }
-.hc-date   { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
-.hc-breed  { font-size: 11px; color: var(--purple); margin-top: 4px; font-weight: 500; }
+.hc-flock   { font-weight: 700; font-size: 14px; }
+.hc-date    { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+.hc-breed   { font-size: 11px; color: var(--purple); margin-top: 4px; font-weight: 500; }
 .hc-parents { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
 .hc-rate-wrap { text-align: center; flex-shrink: 0; min-width: 52px; }
 .hc-rate { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .hc-rate-label { font-size: 9px; color: var(--muted); margin-top: 2px; }
-
 .hc-stats {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 0; border-top: 1px solid var(--bg2); border-bottom: 1px solid var(--bg2);
@@ -650,9 +485,8 @@ async function doBirth() {
 .hc-stat { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .hc-stat.success { color: var(--green); }
 .hc-stat.fail    { color: var(--red); }
-.hcs-icon { font-size: 14px; }
+.hcs-icon  { font-size: 14px; }
 .hcs-arrow { color: var(--border); font-size: 12px; }
-
 .hc-notes { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .hc-del {
   margin-top: 10px; padding: 7px 12px; border-radius: 8px;
@@ -660,7 +494,6 @@ async function doBirth() {
   font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;
 }
 
-/* BIRTH MODAL */
 .overlay {
   position: fixed; inset: 0; z-index: 400;
   background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
@@ -678,7 +511,6 @@ async function doBirth() {
   font-size: 12px; color: var(--muted);
   background: var(--bg2); border-radius: 8px; padding: 8px 12px; margin-bottom: 14px;
 }
-
 .offspring-preview {
   background: var(--purple-pale); border-radius: 10px; padding: 10px 12px;
   font-size: 12px; color: var(--purple); margin-bottom: 12px;
@@ -688,7 +520,6 @@ async function doBirth() {
   border-radius: 10px; padding: 12px; text-align: center;
   font-size: 14px; font-weight: 700; margin-top: 4px; margin-bottom: 8px;
 }
-
 .qty-row { display: flex; align-items: center; gap: 8px; }
 .qty-btn {
   width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
@@ -697,14 +528,12 @@ async function doBirth() {
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .qty-input { text-align: center; font-size: 18px !important; font-weight: 700 !important; }
-
 .btn-full {
   width: 100%; padding: 14px; border-radius: 12px; border: none;
   background: var(--green); color: #fff; font-family: 'Outfit', sans-serif;
   font-size: 15px; font-weight: 700; cursor: pointer;
 }
 .btn-full:disabled { opacity: 0.45; cursor: default; }
-
 .modal-slide-enter-active, .modal-slide-leave-active { transition: all 0.25s ease; }
 .modal-slide-enter-from .modal-sheet, .modal-slide-leave-to .modal-sheet { transform: translateY(100%); }
 .modal-slide-enter-from, .modal-slide-leave-to { opacity: 0; }

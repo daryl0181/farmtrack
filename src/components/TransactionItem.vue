@@ -1,82 +1,130 @@
+<!-- src/components/TransactionItem.vue  ── FULL FILE -->
 <template>
   <div class="tx-item">
-    <div :class="['tx-icon-wrap', transaction.type === 'Income' ? 'income' : 'expense']">
-      <span class="tx-icon">{{ finance.categoryIcon(transaction.category) }}</span>
-    </div>
-    <div class="tx-info">
-      <div class="tx-name">{{ transaction.description || transaction.category }}</div>
-      <div class="tx-meta">
-        <span class="tx-date">{{ transaction.date }}</span>
-        <span class="tx-sep">·</span>
-        <span class="tx-cat">{{ transaction.category }}</span>
+    <div class="tx-left">
+      <div :class="['tx-icon', transaction.type === 'Income' ? 'income' : 'expense']">
+        {{ categoryIcon(transaction.category) }}
+      </div>
+      <div class="tx-info">
+        <div class="tx-cat">{{ transaction.category }}</div>
+        <div class="tx-desc" v-if="transaction.description">{{ transaction.description }}</div>
+        <div class="tx-date">{{ transaction.date }}</div>
       </div>
     </div>
     <div class="tx-right">
-      <div :class="['tx-amount', transaction.type === 'Income' ? 'in' : 'out']">
-        {{ transaction.type === 'Income' ? '+' : '-' }}₱{{ finance.formatNum(transaction.amount) }}
+      <div :class="['tx-amount', transaction.type === 'Income' ? 'positive' : 'negative']">
+        {{ transaction.type === 'Income' ? '+' : '−' }}₱{{ formatNum(transaction.amount) }}
       </div>
-      <div :class="['tx-type-badge', transaction.type === 'Income' ? 'in' : 'out']">
-        {{ transaction.type }}
-      </div>
+      <button class="tx-del" @click="confirmDelete" title="Delete">×</button>
     </div>
-    <button class="tx-delete" @click.stop="finance.removeTransaction(transaction.id)" title="Delete">×</button>
+
+    <!-- INLINE CONFIRM -->
+    <Transition name="confirm-fade">
+      <div class="tx-confirm" v-if="confirming">
+        <span class="tc-msg">Delete this transaction?</span>
+        <div class="tc-btns">
+          <button class="tc-cancel" @click="confirming = false">Cancel</button>
+          <button class="tc-delete" @click="doDelete">Delete</button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
-const finance = useFinanceStore()
+import { useUIStore } from '@/stores/ui'
 
-defineProps({
-  transaction: { type: Object, required: true },
-})
+const props = defineProps({ transaction: Object })
+const finance = useFinanceStore()
+const ui = useUIStore()
+
+const confirming = ref(false)
+
+function confirmDelete() {
+  confirming.value = true
+}
+
+async function doDelete() {
+  await finance.removeTransaction(props.transaction.id)
+  confirming.value = false
+  ui.showToast('🗑️ Transaction deleted')
+}
+
+function categoryIcon(cat) {
+  return finance.categoryIcon(cat)
+}
+
+function formatNum(n) {
+  return Number(n || 0).toLocaleString('en-PH')
+}
 </script>
 
 <style scoped>
 .tx-item {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--surface); padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
+  position: relative;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--bg2);
+  overflow: hidden;
 }
 .tx-item:last-child { border-bottom: none; }
-.tx-item:active { background: var(--bg2); }
 
-.tx-icon-wrap {
-  width: 38px; height: 38px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+/* TOP ROW */
+.tx-left  { display: flex; align-items: center; gap: 10px; }
+.tx-right {
+  position: absolute; top: 13px; right: 0;
+  display: flex; align-items: center; gap: 6px;
 }
-.tx-icon-wrap.income  { background: var(--green-pale); }
-.tx-icon-wrap.expense { background: var(--red-pale); }
-
-.tx-icon { font-size: 18px; }
-
-.tx-info  { flex: 1; min-width: 0; }
-.tx-name  { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tx-meta  { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
-.tx-date  { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
-.tx-sep   { font-size: 10px; color: var(--border); }
-.tx-cat   { font-size: 11px; color: var(--muted); }
-
-.tx-right { text-align: right; flex-shrink: 0; }
-.tx-amount { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; }
-.tx-amount.in  { color: var(--green); }
-.tx-amount.out { color: var(--red);   }
-.tx-type-badge {
-  font-size: 9px; font-weight: 600; margin-top: 3px;
-  padding: 2px 6px; border-radius: 4px; display: inline-block;
+.tx-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
-.tx-type-badge.in  { background: var(--green-pale); color: var(--green); }
-.tx-type-badge.out { background: var(--red-pale);   color: var(--red); }
+.tx-icon.income  { background: var(--green-pale); }
+.tx-icon.expense { background: var(--red-pale); }
 
-.tx-delete {
-  flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
+.tx-info { padding-right: 80px; }  /* leave room for amount + delete btn */
+.tx-cat  { font-size: 13px; font-weight: 600; color: var(--text); }
+.tx-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tx-date { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+.tx-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; font-weight: 700;
+}
+.tx-amount.positive { color: var(--green); }
+.tx-amount.negative { color: var(--red); }
+
+.tx-del {
+  width: 26px; height: 26px; border-radius: 6px;
   border: 1px solid var(--border); background: transparent;
   font-size: 16px; font-weight: 300; color: var(--muted);
-  cursor: pointer; display: flex;
-  align-items: center; justify-content: center;
-  transition: all 0.15s; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  line-height: 1; flex-shrink: 0;
+  transition: all 0.15s;
 }
-.tx-delete:active { background: var(--red-pale); border-color: var(--red); color: var(--red); }
+.tx-del:active { background: var(--red-pale); color: var(--red); border-color: var(--red); }
+
+/* INLINE CONFIRM BAR */
+.tx-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 10px;
+  background: var(--red-pale); border: 1px solid var(--red);
+  border-radius: 10px; padding: 9px 12px;
+}
+.tc-msg { font-size: 12px; color: var(--red); font-weight: 500; }
+.tc-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.tc-cancel, .tc-delete {
+  padding: 5px 12px; border-radius: 7px;
+  font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.tc-cancel {
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+}
+.tc-delete {
+  border: none; background: var(--red); color: #fff;
+}
+
+.confirm-fade-enter-active, .confirm-fade-leave-active { transition: all 0.18s ease; }
+.confirm-fade-enter-from, .confirm-fade-leave-to { opacity: 0; transform: translateY(-4px); }
 </style>

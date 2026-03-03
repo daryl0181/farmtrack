@@ -24,6 +24,24 @@
 
     <div class="page-content">
 
+      <!-- ── ORPHAN CLEANUP BANNER ── -->
+      <!-- Shows only when there are leftover Animal Sale transactions from before the fix -->
+      <Transition name="banner-fade">
+        <div class="cleanup-banner" v-if="finance.orphanedSaleTransactions.length && !cleanedUp">
+          <div class="cb-left">
+            <div class="cb-title">⚠️ Duplicate sale income detected</div>
+            <div class="cb-msg">
+              {{ finance.orphanedSaleTransactions.length }} old sale record{{ finance.orphanedSaleTransactions.length > 1 ? 's are' : ' is' }}
+              adding <strong>₱{{ finance.formatNum(orphanTotal) }}</strong> to your total income.
+              These are leftover entries from before a bug fix. Tap to remove them.
+            </div>
+          </div>
+          <button class="cb-btn" :disabled="cleaning" @click="doCleanup">
+            {{ cleaning ? 'Cleaning…' : 'Fix Now' }}
+          </button>
+        </div>
+      </Transition>
+
       <!-- P&L CARD -->
       <div class="section-title">📊 Profit & Loss</div>
       <div class="pnl-card card">
@@ -62,7 +80,7 @@
         </div>
       </div>
 
-      <!-- INVESTMENT CARD (separate from P&L) -->
+      <!-- INVESTMENT CARD -->
       <div class="section-title">
         🐾 Animal Investment
         <span class="section-hint">Not an expense — this is your asset</span>
@@ -81,8 +99,6 @@
         <div class="invest-note">
           💡 Animal purchases are tracked as investments. They only affect your P&L when animals die or are sold below cost.
         </div>
-
-        <!-- Investment breakdown by animal type -->
         <div class="invest-breakdown" v-if="finance.expenseBreakdown.length">
           <div class="ib-row" v-for="(cat, i) in finance.expenseBreakdown" :key="cat.name">
             <div class="ib-icon">{{ cat.icon }}</div>
@@ -139,22 +155,7 @@
         </div>
       </template>
 
-      <!-- ALL TRANSACTIONS -->
-      <div class="section-title">
-        All Transactions
-        <span class="link" @click="ui.openModal('addExpense')">+ Add</span>
-      </div>
-      <div class="card" v-if="finance.transactions.length">
-        <TransactionItem
-          v-for="t in finance.transactions"
-          :key="t.id"
-          :transaction="t"
-        />
-      </div>
-      <div class="empty-state" v-else>
-        <div class="empty-state-icon">💸</div>
-        <div class="empty-state-text">No transactions yet.</div>
-      </div>
+    
 
     </div>
 
@@ -163,8 +164,8 @@
 </template>
 
 <script setup>
-import PageHeader      from '@/components/PageHeader.vue'
-import TransactionItem from '@/components/TransactionItem.vue'
+import { ref, computed }   from 'vue'
+import PageHeader          from '@/components/PageHeader.vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useUIStore }      from '@/stores/ui'
 
@@ -172,6 +173,28 @@ const finance = useFinanceStore()
 const ui      = useUIStore()
 
 const barColors = ['#2d6a4f', '#c77c2a', '#1d6fa5', '#6b3fa0', '#c1121f', '#0e7490']
+
+// ── ORPHAN CLEANUP ─────────────────────────────────────────────────────────
+const cleaning  = ref(false)
+const cleanedUp = ref(false)
+
+const orphanTotal = computed(() =>
+  finance.orphanedSaleTransactions.reduce((s, t) => s + Number(t.amount || 0), 0)
+)
+
+async function doCleanup() {
+  cleaning.value = true
+  try {
+    const count = await finance.cleanupOrphanedSaleTransactions()
+    ui.showToast(`✅ Removed ${count} duplicate sale entr${count === 1 ? 'y' : 'ies'} from income`)
+    cleanedUp.value = true
+  } catch (e) {
+    ui.showToast('⚠️ Cleanup failed, try again')
+    console.error(e)
+  } finally {
+    cleaning.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -181,6 +204,25 @@ const barColors = ['#2d6a4f', '#c77c2a', '#1d6fa5', '#6b3fa0', '#c1121f', '#0e74
 }
 .profit-chip.positive { color: #7ee787; }
 .profit-chip.negative { color: #f8a09d; }
+
+/* CLEANUP BANNER */
+.cleanup-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #3d1f00; border: 1.5px solid var(--amber);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+}
+.cb-left  { flex: 1; }
+.cb-title { font-size: 13px; font-weight: 700; color: var(--amber); margin-bottom: 4px; }
+.cb-msg   { font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+.cb-msg strong { color: #fff; }
+.cb-btn {
+  flex-shrink: 0; padding: 9px 16px; border-radius: 8px; border: none;
+  background: var(--amber); color: #000; font-family: 'Outfit', sans-serif;
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.cb-btn:disabled { opacity: 0.5; }
+.banner-fade-enter-active, .banner-fade-leave-active { transition: all 0.3s ease; }
+.banner-fade-enter-from, .banner-fade-leave-to { opacity: 0; transform: translateY(-8px); }
 
 /* P&L CARD */
 .pnl-card { padding: 8px 16px 16px; margin-bottom: 20px; }
@@ -198,9 +240,7 @@ const barColors = ['#2d6a4f', '#c77c2a', '#1d6fa5', '#6b3fa0', '#c1121f', '#0e74
 .pnl-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
 /* INVESTMENT CARD */
-.section-hint {
-  font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px;
-}
+.section-hint { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px; }
 .invest-card { padding: 16px; margin-bottom: 20px; }
 .invest-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -226,10 +266,7 @@ const barColors = ['#2d6a4f', '#c77c2a', '#1d6fa5', '#6b3fa0', '#c1121f', '#0e74
   font-size: 10px; font-weight: 600; color: #fff;
   min-width: 40px; transition: width 0.6s ease;
 }
-.ib-val {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted);
-  width: 54px; text-align: right; flex-shrink: 0;
-}
+.ib-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); width: 54px; text-align: right; flex-shrink: 0; }
 
 /* SUMMARY GRID */
 .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
