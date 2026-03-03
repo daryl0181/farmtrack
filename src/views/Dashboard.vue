@@ -161,7 +161,7 @@
 
         <!-- Animal investment shown separately, clearly labeled as asset -->
         <div class="finance-invest-row">
-          <span class="f-label-muted">🐾 Animal Investment (asset)</span>
+          <span class="f-label-muted">🐾 Animal Investment (asset) </span>
           <span class="f-val-muted"
             >₱{{ finance.formatNum(finance.totalAnimalInvestment) }}</span
           >
