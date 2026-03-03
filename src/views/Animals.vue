@@ -2,287 +2,509 @@
   <div>
     <PageHeader greeting="Manage" title="All Animals">
       <template #right>
-        <div style="color:rgba(255,255,255,0.7); font-size:13px; padding-top:6px;">
-          {{ animalStore.totalAnimals }} total
+        <div class="header-counts">
+          <span>🐐 {{ animalStore.totalGoats }}</span>
+          <span>🦆 {{ animalStore.totalDucks }}</span>
         </div>
       </template>
+      <div class="header-stats cols-3">
+        <div class="header-stat">
+          <div class="header-stat-val">{{ animalStore.totalAnimals }}</div>
+          <div class="header-stat-label">Total Live</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-val" style="color:#f8a09d;">
+            ₱{{ formatNum(animalStore.totalAnimalCosts) }}
+          </div>
+          <div class="header-stat-label">Total Cost</div>
+        </div>
+        <div class="header-stat">
+          <div class="header-stat-val" style="color:#7ee787;">
+            {{ totalSold }}
+          </div>
+          <div class="header-stat-label">Total Sold</div>
+        </div>
+      </div>
     </PageHeader>
 
     <div class="page-content">
 
-      <!-- FILTER CHIPS + BULK SELL TOGGLE -->
-      <div class="top-bar">
-        <div class="filter-bar">
-          <button
-            v-for="f in filters" :key="f"
-            :class="['filter-chip', activeFilter === f ? 'active' : '']"
-            @click="activeFilter = f; selectedIds = new Set()"
-          >{{ f }}</button>
-        </div>
+      <!-- FILTER TABS -->
+      <div class="filter-bar">
         <button
-          :class="['bulk-btn', bulkMode ? 'active' : '']"
-          @click="toggleBulkMode"
-        >{{ bulkMode ? 'Cancel' : 'Bulk Sell' }}</button>
+          v-for="f in filters" :key="f.key"
+          :class="['filter-chip', activeFilter === f.key ? 'active' : '']"
+          @click="activeFilter = f.key"
+        >{{ f.label }}</button>
       </div>
 
-      <!-- BULK ACTION BAR -->
-      <Transition name="slide-down">
-        <div class="bulk-bar" v-if="bulkMode">
-          <div class="bulk-info">
-            <span v-if="selectedIds.size === 0">Tap animals to select</span>
-            <span v-else><strong>{{ selectedIds.size }}</strong> selected</span>
-          </div>
-          <div class="bulk-actions">
-            <button class="bulk-select-all" @click="selectAll">
-              {{ selectedIds.size === filteredAnimals.length ? 'Deselect All' : 'Select All' }}
-            </button>
-            <button class="bulk-sell-btn" :disabled="selectedIds.size === 0" @click="openBulkSell">
-              💰 Sell {{ selectedIds.size > 0 ? selectedIds.size : '' }}
-            </button>
+      <!-- ── BATCHES LIST ── -->
+      <template v-if="activeFilter !== 'flagged'">
+        <div v-if="filteredBatches.length" class="batch-list">
+          <div
+            class="batch-card card"
+            v-for="batch in filteredBatches"
+            :key="batch.id"
+          >
+            <!-- BATCH HEADER -->
+            <div class="batch-header" @click="toggleExpand(batch.id)">
+              <div class="batch-left">
+                <span class="batch-emoji">{{ animalStore.animalEmoji(batch.type) }}</span>
+                <div class="batch-title-group">
+                  <div class="batch-label">{{ batch.label || batch.type + ' Batch' }}</div>
+                  <div class="batch-meta">
+                    {{ animalStore.batchSexLabel(batch.sex) }} ·
+                    Added {{ batch.addedDate }}
+                  </div>
+                </div>
+              </div>
+              <div class="batch-right">
+                <div class="batch-count">{{ batch.currentCount }}</div>
+                <div class="batch-count-label">alive</div>
+              </div>
+            </div>
+
+            <!-- BATCH STATS ROW -->
+            <div class="batch-stats">
+              <div class="bs-pill">
+                <span class="bs-icon">💰</span>
+                <span>₱{{ formatNum(batch.pricePerHead) }}/head</span>
+              </div>
+              <div class="bs-pill">
+                <span class="bs-icon">📦</span>
+                <span>{{ batch.originalCount }} original</span>
+              </div>
+              <div class="bs-pill" v-if="batch.totalSold">
+                <span class="bs-icon">💸</span>
+                <span>{{ batch.totalSold }} sold</span>
+              </div>
+              <div class="bs-pill" v-if="batch.totalDied">
+                <span class="bs-icon">💀</span>
+                <span>{{ batch.totalDied }} died</span>
+              </div>
+              <span :class="['tag', animalStore.healthTagColor(batch.health)]">
+                {{ batch.health }}
+              </span>
+            </div>
+
+            <!-- TOTAL COST BAR -->
+            <div class="cost-row">
+              <span class="cost-label">Total cost</span>
+              <span class="cost-val">₱{{ formatNum(batch.pricePerHead * batch.originalCount) }}</span>
+            </div>
+
+            <!-- FLAGGED INDIVIDUALS (goat batches only) -->
+            <div
+              class="flagged-strip"
+              v-if="batch.type === 'Goat' && flaggedInBatch(batch.id).length"
+            >
+              <div class="flagged-title">🚩 Flagged individuals</div>
+              <div class="flagged-list">
+                <div
+                  class="flagged-item"
+                  v-for="f in flaggedInBatch(batch.id)"
+                  :key="f.id"
+                >
+                  <span class="fi-name">{{ f.name }}</span>
+                  <span :class="['tag', animalStore.healthTagColor(f.health)]" style="font-size:9px;">
+                    {{ f.health }}
+                  </span>
+                  <button class="fi-remove" @click.stop="animalStore.removeFlagged(f.id)">×</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- NOTES -->
+            <div class="batch-notes" v-if="batch.notes">📝 {{ batch.notes }}</div>
+
+            <!-- ACTION BUTTONS -->
+            <div class="batch-actions">
+              <button class="act-btn sell" @click="openSell(batch)">
+                💰 Sell
+              </button>
+              <button class="act-btn death" @click="openDeath(batch)">
+                💀 Death
+              </button>
+              <button
+                class="act-btn flag"
+                v-if="batch.type === 'Goat'"
+                @click="openFlag(batch)"
+              >
+                🚩 Flag
+              </button>
+              <button class="act-btn edit" @click="openEdit(batch)">
+                ✏️ Edit
+              </button>
+              <button class="act-btn delete" @click="confirmDelete(batch)">
+                🗑️
+              </button>
+            </div>
           </div>
         </div>
-      </Transition>
 
-      <!-- ANIMAL LIST -->
-      <div class="animal-list" v-if="filteredAnimals.length">
-        <div
-          class="animal-item card"
-          v-for="a in filteredAnimals"
-          :key="a.id"
-          :class="{ 'selected': bulkMode && selectedIds.has(a.id), 'selectable': bulkMode }"
-          @click="bulkMode ? toggleSelect(a.id) : null"
-        >
-          <!-- BULK CHECKBOX -->
-          <div v-if="bulkMode" class="bulk-check">
-            <div :class="['check-circle', selectedIds.has(a.id) ? 'checked' : '']">
-              <span v-if="selectedIds.has(a.id)">✓</span>
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">{{ activeFilter === 'Goat' ? '🐐' : activeFilter === 'Duck' ? '🦆' : '🐾' }}</div>
+          <div class="empty-state-text">No {{ activeFilter === 'All' ? '' : activeFilter }} batches yet.<br>Tap + to add animals.</div>
+        </div>
+      </template>
+
+      <!-- ── FLAGGED INDIVIDUALS TAB ── -->
+      <template v-if="activeFilter === 'flagged'">
+        <div class="section-title">🚩 Flagged Goats</div>
+        <div v-if="animalStore.flagged.length" class="flagged-full-list">
+          <div class="flagged-card card" v-for="f in animalStore.flagged" :key="f.id">
+            <div class="fc-top">
+              <span class="fc-emoji">🐐</span>
+              <div class="fc-info">
+                <div class="fc-name">{{ f.name }}</div>
+                <div class="fc-batch">{{ batchLabel(f.batchId) }}</div>
+              </div>
+              <span :class="['tag', animalStore.healthTagColor(f.health)]">{{ f.health }}</span>
+            </div>
+            <div class="fc-detail" v-if="f.notes">{{ f.notes }}</div>
+            <div class="fc-date">Flagged: {{ f.flaggedDate }}</div>
+            <div class="fc-actions">
+              <button class="act-btn edit" @click="openEditFlagged(f)">✏️ Edit</button>
+              <button class="act-btn delete" @click="animalStore.removeFlagged(f.id)">🗑️ Remove</button>
             </div>
           </div>
-
-          <!-- BULK VIEW (simplified) -->
-          <template v-if="bulkMode">
-            <div class="ai-emoji">{{ animalStore.animalEmoji(a.type) }}</div>
-            <div class="ai-info">
-              <div class="ai-name">{{ a.name || '(unnamed)' }}</div>
-              <div class="ai-meta">{{ a.type }} · {{ a.sex }}</div>
-              <div class="ai-tags">
-                <span class="tag amber" v-if="a.boughtFor">Cost ₱{{ formatNum(a.boughtFor) }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- NORMAL VIEW MODE -->
-          <template v-if="!bulkMode && editingId !== a.id">
-            <div class="ai-emoji">{{ animalStore.animalEmoji(a.type) }}</div>
-            <div class="ai-info">
-              <div class="ai-name">{{ a.name || '(unnamed)' }}</div>
-              <div class="ai-meta">
-                {{ a.age ? a.age + ' months' : '' }}{{ a.age && a.weight ? ' · ' : '' }}{{ a.weight ? a.weight + ' kg' : '' }}
-              </div>
-              <div class="ai-tags">
-                <span :class="['tag', animalStore.healthTagColor(a.health)]">{{ a.health }}</span>
-                <span class="tag blue" v-if="a.sex === 'Male'">Male</span>
-                <span class="tag purple" v-else>Female</span>
-                <span class="tag green" v-if="a.addedDate">{{ a.addedDate }}</span>
-                <span class="tag amber" v-if="a.boughtFor">₱{{ formatNum(a.boughtFor) }} cost</span>
-              </div>
-              <div class="ai-notes" v-if="a.notes">📝 {{ a.notes }}</div>
-            </div>
-            <div class="ai-actions">
-              <button class="icon-btn" @click.stop="ui.openModal('addHealth')" title="Health record">💊</button>
-              <button class="icon-btn green" @click.stop="openSell(a)" title="Sell">💰</button>
-              <button class="icon-btn" @click.stop="startEdit(a)" title="Edit">✏️</button>
-              <button class="icon-btn red" @click.stop="confirmDelete(a)" title="Delete">🗑️</button>
-            </div>
-          </template>
-
-          <!-- EDIT MODE -->
-          <template v-if="!bulkMode && editingId === a.id">
-            <div class="edit-form">
-              <div class="edit-title">✏️ Edit Animal</div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Name</label>
-                  <input class="form-input" v-model="editForm.name" placeholder="Name / Tag" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Type</label>
-                  <select class="form-select" v-model="editForm.type">
-                    <option value="Goat">🐐 Goat</option>
-                    <option value="Duck">🦆 Duck</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Sex</label>
-                  <select class="form-select" v-model="editForm.sex">
-                    <option>Female</option>
-                    <option>Male</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Health</label>
-                  <select class="form-select" v-model="editForm.health">
-                    <option>Healthy</option>
-                    <option>Sick</option>
-                    <option>Under Treatment</option>
-                    <option>Pregnant</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Age (mo)</label>
-                  <input class="form-input" type="number" v-model="editForm.age" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Weight (kg)</label>
-                  <input class="form-input" type="number" v-model="editForm.weight" />
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Bought For (₱)</label>
-                <input class="form-input" type="number" v-model="editForm.boughtFor" placeholder="0" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Notes</label>
-                <input class="form-input" v-model="editForm.notes" placeholder="Optional..." />
-              </div>
-              <div class="edit-actions">
-                <button class="btn-cancel" @click="cancelEdit">Cancel</button>
-                <button class="btn-save" @click="saveEdit(a.id)">Save</button>
-              </div>
-            </div>
-          </template>
-
         </div>
-      </div>
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">🚩</div>
+          <div class="empty-state-text">No flagged individuals.<br>Flag pregnant or sick goats from a batch.</div>
+        </div>
+      </template>
 
-      <div class="empty-state" v-else>
-        <div class="empty-state-icon">🐾</div>
-        <div class="empty-state-text">No {{ activeFilter === 'All' ? '' : activeFilter }} animals yet.<br>Tap + to add one.</div>
-      </div>
+      <!-- SOLD HISTORY -->
+      <template v-if="activeFilter === 'All' && animalStore.soldBatches.length">
+        <div class="section-title" style="margin-top:8px;">
+          Recent Sales
+          <span class="section-link" @click="activeFilter = 'sold'">See all →</span>
+        </div>
+        <div class="sold-mini">
+          <div class="sold-mini-item" v-for="s in animalStore.soldBatches.slice(0,3)" :key="s.id">
+            <span class="sm-emoji">{{ animalStore.animalEmoji(s.type) }}</span>
+            <div class="sm-info">
+              <div class="sm-label">{{ s.quantity }}× {{ s.batchLabel }}</div>
+              <div class="sm-date">{{ s.soldDate }}{{ s.soldTo ? ' → ' + s.soldTo : '' }}</div>
+            </div>
+            <div :class="['sm-profit', s.profit >= 0 ? 'pos' : 'neg']">
+              {{ s.profit >= 0 ? '+' : '' }}₱{{ formatNum(s.profit) }}
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- FULL SOLD HISTORY TAB -->
+      <template v-if="activeFilter === 'sold'">
+        <div class="section-title">💰 All Sales</div>
+        <div v-if="animalStore.soldBatches.length" class="sold-full-list">
+          <div class="sold-card card" v-for="s in animalStore.soldBatches" :key="s.id">
+            <div class="sc-top">
+              <span class="sc-emoji">{{ animalStore.animalEmoji(s.type) }}</span>
+              <div class="sc-info">
+                <div class="sc-label">{{ s.quantity }}× {{ s.batchLabel }}</div>
+                <div class="sc-meta">
+                  {{ s.soldDate }}{{ s.soldTo ? ' → ' + s.soldTo : '' }}
+                  <span v-if="s.sexSold && s.sexSold !== 'Mixed'"> · {{ s.sexSold }} only</span>
+                </div>
+              </div>
+              <div :class="['sc-profit', s.profit >= 0 ? 'pos' : 'neg']">
+                {{ s.profit >= 0 ? '+' : '' }}₱{{ formatNum(s.profit) }}
+              </div>
+            </div>
+            <div class="sc-prices">
+              <span>Cost: ₱{{ formatNum(s.costBasis) }}</span>
+              <span class="sc-arrow">→</span>
+              <span>Revenue: ₱{{ formatNum(s.totalRevenue) }}</span>
+              <span class="sc-pph">(₱{{ formatNum(s.pricePerHead) }}/head)</span>
+            </div>
+          </div>
+        </div>
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">💰</div>
+          <div class="empty-state-text">No sales yet.</div>
+        </div>
+      </template>
 
     </div>
 
-    <!-- ── SINGLE SELL MODAL ── -->
-    <Transition name="confirm">
-      <div class="confirm-overlay" v-if="sellTarget" @click.self="sellTarget = null">
-        <div class="confirm-box">
-          <div class="confirm-icon">💰</div>
-          <div class="confirm-title">Sell Animal</div>
-          <div class="confirm-msg">
-            <strong>{{ sellTarget.name || sellTarget.type }}</strong>
-            <span v-if="sellTarget.boughtFor"> · Cost: ₱{{ formatNum(sellTarget.boughtFor) }}</span>
+    <!-- ── SELL MODAL ── -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="sellTarget" @click.self="sellTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <div class="modal-title">💰 Sell from {{ sellTarget.label || sellTarget.type }}</div>
+
+          <div class="modal-info-row">
+            <span>{{ sellTarget.currentCount }} available</span>
+            <span>₱{{ formatNum(sellTarget.pricePerHead) }}/head cost</span>
           </div>
-          <div class="sell-form">
-            <div class="form-group">
-              <label class="form-label">Sold For (₱)</label>
-              <input class="form-input" type="number" v-model.number="sellForm.soldFor" placeholder="0" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Sold To <span class="optional">(optional)</span></label>
-              <input class="form-input" v-model="sellForm.soldTo" placeholder="Buyer name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Date</label>
-              <input class="form-input" type="date" v-model="sellForm.soldDate" />
-            </div>
-            <div class="profit-preview" v-if="sellForm.soldFor">
-              <div class="pp-row">
-                <span class="pp-label">Profit / Loss:</span>
-                <span :class="['pp-val', sellProfit >= 0 ? 'pos' : 'neg']">
-                  {{ sellProfit >= 0 ? '+' : '' }}₱{{ formatNum(sellProfit) }}
-                </span>
-              </div>
+
+          <!-- SEX FILTER (only for mixed batches) -->
+          <div class="form-group" v-if="sellTarget.sex === 'Mixed'">
+            <label class="form-label">Selling which sex?</label>
+            <div class="seg-ctrl">
+              <button
+                v-for="s in ['Mixed','Male','Female']" :key="s"
+                :class="['seg-btn', sellForm.sexSold === s ? 'active' : '']"
+                @click="sellForm.sexSold = s"
+              >{{ s === 'Mixed' ? '⚥ Both' : s === 'Male' ? '♂ Male' : '♀ Female' }}</button>
             </div>
           </div>
-          <div class="confirm-btns">
-            <button class="btn-cancel" @click="sellTarget = null">Cancel</button>
-            <button class="btn-sell" @click="doSell" :disabled="sellingSaving">
-              {{ sellingSaving ? 'Saving…' : 'Confirm Sale' }}
-            </button>
+
+          <!-- QUANTITY -->
+          <div class="form-group">
+            <label class="form-label">How many to sell?</label>
+            <div class="qty-row">
+              <button class="qty-btn" @click="sellForm.quantity = Math.max(1, sellForm.quantity - 1)">−</button>
+              <input class="form-input qty-input" type="number" v-model.number="sellForm.quantity" :max="sellTarget.currentCount" min="1" />
+              <button class="qty-btn" @click="sellForm.quantity = Math.min(sellTarget.currentCount, sellForm.quantity + 1)">+</button>
+            </div>
+            <div class="qty-hint">Selling <strong>{{ sellForm.quantity }}</strong> of {{ sellTarget.currentCount }} — <strong>{{ sellTarget.currentCount - sellForm.quantity }}</strong> remaining</div>
+          </div>
+
+          <!-- PRICE MODE -->
+          <div class="form-group">
+            <label class="form-label">Selling price</label>
+            <div class="seg-ctrl">
+              <button :class="['seg-btn', sellForm.priceMode === 'each' ? 'active' : '']" @click="sellForm.priceMode = 'each'">Per Head</button>
+              <button :class="['seg-btn', sellForm.priceMode === 'total' ? 'active' : '']" @click="sellForm.priceMode = 'total'">Total Amount</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              {{ sellForm.priceMode === 'each' ? 'Price per head (₱)' : 'Total amount (₱)' }}
+            </label>
+            <input class="form-input" type="number" v-model.number="sellForm.price" placeholder="0" />
+          </div>
+
+          <!-- PROFIT PREVIEW -->
+          <div class="profit-preview" v-if="sellForm.price">
+            <div class="pp-row">
+              <span class="pp-label">Total Revenue</span>
+              <span class="pp-val pos">₱{{ formatNum(sellRevenue) }}</span>
+            </div>
+            <div class="pp-row">
+              <span class="pp-label">Cost Basis</span>
+              <span class="pp-muted">₱{{ formatNum(sellCostBasis) }}</span>
+            </div>
+            <div class="pp-row total-row">
+              <span class="pp-label" style="font-weight:700;">Profit / Loss</span>
+              <span :class="['pp-val', sellProfit >= 0 ? 'pos' : 'neg']">
+                {{ sellProfit >= 0 ? '+' : '' }}₱{{ formatNum(sellProfit) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Sold To <span class="optional">(optional)</span></label>
+            <input class="form-input" v-model="sellForm.soldTo" placeholder="Buyer name" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" type="date" v-model="sellForm.soldDate" />
+          </div>
+
+          <button class="btn-full" @click="doSell" :disabled="sellSaving || !sellForm.price">
+            {{ sellSaving ? 'Saving…' : `Sell ${sellForm.quantity} ${sellTarget.type}${sellForm.quantity > 1 ? 's' : ''}` }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── DEATH MODAL ── -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="deathTarget" @click.self="deathTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <div class="modal-title">💀 Record Deaths</div>
+          <div class="modal-info-row">
+            <span>{{ deathTarget.label || deathTarget.type }}</span>
+            <span>{{ deathTarget.currentCount }} alive</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">How many died?</label>
+            <div class="qty-row">
+              <button class="qty-btn" @click="deathForm.quantity = Math.max(1, deathForm.quantity - 1)">−</button>
+              <input class="form-input qty-input" type="number" v-model.number="deathForm.quantity" :max="deathTarget.currentCount" min="1" />
+              <button class="qty-btn" @click="deathForm.quantity = Math.min(deathTarget.currentCount, deathForm.quantity + 1)">+</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cause of Death</label>
+            <select class="form-select" v-model="deathForm.cause">
+              <option>Disease</option>
+              <option>Injury</option>
+              <option>Natural</option>
+              <option>Unknown</option>
+              <option>Predator Attack</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" type="date" v-model="deathForm.date" />
+          </div>
+
+          <button class="btn-full danger" @click="doDeath" :disabled="deathSaving">
+            {{ deathSaving ? 'Saving…' : `Record ${deathForm.quantity} Death${deathForm.quantity > 1 ? 's' : ''}` }}
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── FLAG INDIVIDUAL MODAL ── -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="flagTarget" @click.self="flagTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <div class="modal-title">🚩 Flag Individual Goat</div>
+          <div class="modal-info-row">
+            <span>From: {{ flagTarget.label || 'Goat Batch' }}</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Name / Tag</label>
+            <input class="form-input" v-model="flagForm.name" placeholder="e.g. Bella or Tag #5" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Sex</label>
+              <select class="form-select" v-model="flagForm.sex">
+                <option>Female</option>
+                <option>Male</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select class="form-select" v-model="flagForm.health">
+                <option>Pregnant</option>
+                <option>Sick</option>
+                <option>Under Treatment</option>
+                <option>For Breeding</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input class="form-input" v-model="flagForm.notes" placeholder="e.g. mated March 1, due July 29" />
+          </div>
+
+          <button class="btn-full" @click="doFlag">Save Flag</button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── EDIT BATCH MODAL ── -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="editTarget" @click.self="editTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <div class="modal-title">✏️ Edit Batch</div>
+
+          <div class="form-group">
+            <label class="form-label">Batch Label</label>
+            <input class="form-input" v-model="editForm.label" placeholder="e.g. Flock A, Batch 2" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Type</label>
+              <select class="form-select" v-model="editForm.type">
+                <option>Goat</option>
+                <option>Duck</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sex</label>
+              <select class="form-select" v-model="editForm.sex">
+                <option>Mixed</option>
+                <option>Female</option>
+                <option>Male</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Current Count</label>
+              <input class="form-input" type="number" v-model.number="editForm.currentCount" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Price/Head (₱)</label>
+              <input class="form-input" type="number" v-model.number="editForm.pricePerHead" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Health Status</label>
+            <select class="form-select" v-model="editForm.health">
+              <option>Healthy</option>
+              <option>Sick</option>
+              <option>Under Treatment</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input class="form-input" v-model="editForm.notes" placeholder="Optional..." />
+          </div>
+          <div class="edit-actions">
+            <button class="btn-cancel" @click="editTarget = null">Cancel</button>
+            <button class="btn-save" @click="doEdit">Save Changes</button>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- ── BULK SELL MODAL ── -->
-    <Transition name="confirm">
-      <div class="confirm-overlay" v-if="showBulkSellModal" @click.self="showBulkSellModal = false">
-        <div class="confirm-box bulk-sell-box">
-          <div class="confirm-icon">💰</div>
-          <div class="confirm-title">Bulk Sell — {{ selectedIds.size }} Animals</div>
-
-          <!-- SELECTED PREVIEW -->
-          <div class="bulk-preview">
-            <div class="bp-item" v-for="a in selectedAnimals" :key="a.id">
-              <span class="bp-emoji">{{ animalStore.animalEmoji(a.type) }}</span>
-              <span class="bp-name">{{ a.name || a.type }}</span>
-              <span class="bp-cost" v-if="a.boughtFor">₱{{ formatNum(a.boughtFor) }}</span>
+    <!-- ── EDIT FLAGGED MODAL ── -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="editFlaggedTarget" @click.self="editFlaggedTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <div class="modal-title">✏️ Edit Flagged Goat</div>
+          <div class="form-group">
+            <label class="form-label">Name / Tag</label>
+            <input class="form-input" v-model="editFlaggedForm.name" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Sex</label>
+              <select class="form-select" v-model="editFlaggedForm.sex">
+                <option>Female</option><option>Male</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select class="form-select" v-model="editFlaggedForm.health">
+                <option>Pregnant</option>
+                <option>Sick</option>
+                <option>Under Treatment</option>
+                <option>For Breeding</option>
+                <option>Healthy</option>
+              </select>
             </div>
           </div>
-
-          <div class="sell-form" style="margin-top:14px;">
-            <!-- PRICE MODE -->
-            <div class="price-mode-row">
-              <button :class="['mode-btn', bulkPriceMode === 'total' ? 'active' : '']" @click="bulkPriceMode = 'total'">Total Price</button>
-              <button :class="['mode-btn', bulkPriceMode === 'each' ? 'active' : '']" @click="bulkPriceMode = 'each'">Price Each</button>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">
-                {{ bulkPriceMode === 'total' ? `Total for all ${selectedIds.size} animals (₱)` : 'Price per animal (₱)' }}
-              </label>
-              <input class="form-input" type="number" v-model.number="bulkForm.price" placeholder="0" />
-            </div>
-
-            <div class="profit-preview" v-if="bulkForm.price">
-              <div class="pp-row">
-                <span class="pp-label">Total Revenue:</span>
-                <span class="pp-val pos">₱{{ formatNum(bulkTotalRevenue) }}</span>
-              </div>
-              <div class="pp-row" style="margin-top:5px;">
-                <span class="pp-label">Total Cost:</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);">₱{{ formatNum(bulkTotalCost) }}</span>
-              </div>
-              <div class="pp-row" style="margin-top:5px;padding-top:8px;border-top:1px solid var(--border);">
-                <span class="pp-label">Net Profit / Loss:</span>
-                <span :class="['pp-val', bulkNetProfit >= 0 ? 'pos' : 'neg']">
-                  {{ bulkNetProfit >= 0 ? '+' : '' }}₱{{ formatNum(bulkNetProfit) }}
-                </span>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Sold To <span class="optional">(optional)</span></label>
-              <input class="form-input" v-model="bulkForm.soldTo" placeholder="Buyer name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Date</label>
-              <input class="form-input" type="date" v-model="bulkForm.soldDate" />
-            </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input class="form-input" v-model="editFlaggedForm.notes" />
           </div>
-
-          <div class="confirm-btns">
-            <button class="btn-cancel" @click="showBulkSellModal = false">Cancel</button>
-            <button class="btn-sell" @click="doBulkSell" :disabled="bulkSaving || !bulkForm.price">
-              {{ bulkSaving ? 'Saving…' : `Sell ${selectedIds.size} Animals` }}
-            </button>
+          <div class="edit-actions">
+            <button class="btn-cancel" @click="editFlaggedTarget = null">Cancel</button>
+            <button class="btn-save" @click="doEditFlagged">Save</button>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- DELETE CONFIRM -->
+    <!-- ── DELETE CONFIRM ── -->
     <Transition name="confirm">
-      <div class="confirm-overlay" v-if="deleteTarget" @click.self="deleteTarget = null">
+      <div class="overlay confirm-overlay" v-if="deleteTarget" @click.self="deleteTarget = null">
         <div class="confirm-box">
           <div class="confirm-icon">🗑️</div>
-          <div class="confirm-title">Delete Animal?</div>
+          <div class="confirm-title">Delete Batch?</div>
           <div class="confirm-msg">
-            Remove <strong>{{ deleteTarget.name || deleteTarget.type }}</strong> from your records? This cannot be undone.
+            Remove <strong>{{ deleteTarget.label || deleteTarget.type }}</strong> ({{ deleteTarget.currentCount }} animals) from records? This cannot be undone.
           </div>
           <div class="confirm-btns">
             <button class="btn-cancel" @click="deleteTarget = null">Cancel</button>
@@ -306,294 +528,453 @@ const animalStore = useAnimalStore()
 const ui          = useUIStore()
 const today       = new Date().toISOString().slice(0, 10)
 
-const filters      = ['All', 'Goat', 'Duck']
+// ── FILTERS ───────────────────────────────────────────────────────────────────
+const filters = [
+  { key: 'All',     label: 'All' },
+  { key: 'Goat',    label: '🐐 Goats' },
+  { key: 'Duck',    label: '🦆 Ducks' },
+  { key: 'flagged', label: '🚩 Flagged' },
+  { key: 'sold',    label: '💰 Sales' },
+]
 const activeFilter = ref('All')
 
-const filteredAnimals = computed(() =>
-  activeFilter.value === 'All'
-    ? animalStore.animals.filter(a => ['Goat', 'Duck'].includes(a.type))
-    : animalStore.animals.filter(a => a.type === activeFilter.value)
+const filteredBatches = computed(() => {
+  if (activeFilter.value === 'All') return animalStore.batches
+  if (activeFilter.value === 'Goat') return animalStore.goatBatches
+  if (activeFilter.value === 'Duck') return animalStore.duckBatches
+  return []
+})
+
+const totalSold = computed(() =>
+  animalStore.soldBatches.reduce((s, b) => s + (b.quantity || 0), 0)
 )
 
 function formatNum(n) {
   return Number(n || 0).toLocaleString('en-PH')
 }
 
-// ── BULK MODE ─────────────────────────────────────────
-const bulkMode    = ref(false)
-const selectedIds = ref(new Set())
-
-function toggleBulkMode() {
-  bulkMode.value = !bulkMode.value
-  selectedIds.value = new Set()
-  editingId.value = null
+function flaggedInBatch(batchId) {
+  return animalStore.flaggedByBatch[batchId] || []
 }
 
-function toggleSelect(id) {
-  const s = new Set(selectedIds.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  selectedIds.value = s
+function batchLabel(batchId) {
+  const b = animalStore.batches.find(b => b.id === batchId)
+  return b ? (b.label || b.type + ' Batch') : 'Unknown Batch'
 }
 
-function selectAll() {
-  if (selectedIds.value.size === filteredAnimals.value.length) {
-    selectedIds.value = new Set()
-  } else {
-    selectedIds.value = new Set(filteredAnimals.value.map(a => a.id))
-  }
-}
-
-const selectedAnimals = computed(() =>
-  filteredAnimals.value.filter(a => selectedIds.value.has(a.id))
-)
-
-// ── BULK SELL ─────────────────────────────────────────
-const showBulkSellModal = ref(false)
-const bulkPriceMode     = ref('total')
-const bulkSaving        = ref(false)
-const bulkForm          = reactive({ price: '', soldTo: '', soldDate: today })
-
-const bulkTotalRevenue = computed(() => {
-  if (!bulkForm.price) return 0
-  return bulkPriceMode.value === 'total'
-    ? Number(bulkForm.price)
-    : Number(bulkForm.price) * selectedIds.value.size
+// ── SELL ──────────────────────────────────────────────────────────────────────
+const sellTarget = ref(null)
+const sellSaving = ref(false)
+const sellForm   = reactive({
+  quantity: 1,
+  priceMode: 'each',
+  price: '',
+  sexSold: 'Mixed',
+  soldTo: '',
+  soldDate: today,
 })
-const bulkTotalCost = computed(() =>
-  selectedAnimals.value.reduce((s, a) => s + (Number(a.boughtFor) || 0), 0)
+
+const sellRevenue   = computed(() => {
+  if (!sellForm.price) return 0
+  return sellForm.priceMode === 'each'
+    ? Number(sellForm.price) * sellForm.quantity
+    : Number(sellForm.price)
+})
+const sellCostBasis = computed(() =>
+  (sellTarget.value?.pricePerHead || 0) * sellForm.quantity
 )
-const bulkNetProfit = computed(() => bulkTotalRevenue.value - bulkTotalCost.value)
-
-function openBulkSell() {
-  if (!selectedIds.value.size) return
-  Object.assign(bulkForm, { price: '', soldTo: '', soldDate: today })
-  bulkPriceMode.value = 'total'
-  showBulkSellModal.value = true
-}
-
-async function doBulkSell() {
-  if (!bulkForm.price || bulkSaving.value) return
-  bulkSaving.value = true
-  try {
-    const animals  = selectedAnimals.value
-    const priceEach = bulkPriceMode.value === 'each'
-      ? Number(bulkForm.price)
-      : Number(bulkForm.price) / animals.length
-
-    await Promise.all(
-      animals.map(animal => animalStore.sellAnimal({
-        animal,
-        soldFor:  priceEach,
-        soldTo:   bulkForm.soldTo,
-        soldDate: bulkForm.soldDate,
-      }))
-    )
-    ui.showToast(`💰 ${animals.length} animals sold!`)
-    showBulkSellModal.value = false
-    bulkMode.value = false
-    selectedIds.value = new Set()
-  } finally {
-    bulkSaving.value = false
-  }
-}
-
-// ── EDIT ──────────────────────────────────────────────
-const editingId = ref(null)
-const editForm  = reactive({ name: '', type: '', sex: '', health: '', age: '', weight: '', boughtFor: '', notes: '' })
-
-function startEdit(a) {
-  editingId.value = a.id
-  Object.assign(editForm, { name: a.name, type: a.type, sex: a.sex, health: a.health, age: a.age, weight: a.weight, boughtFor: a.boughtFor || '', notes: a.notes })
-}
-function cancelEdit() { editingId.value = null }
-async function saveEdit(id) {
-  await animalStore.updateAnimal(id, { ...editForm })
-  editingId.value = null
-  ui.showToast('✅ Animal updated!')
-}
-
-// ── SINGLE SELL ───────────────────────────────────────
-const sellTarget    = ref(null)
-const sellingSaving = ref(false)
-const sellForm      = reactive({ soldFor: '', soldTo: '', soldDate: today })
-
-const sellProfit = computed(() =>
-  (Number(sellForm.soldFor) || 0) - (Number(sellTarget.value?.boughtFor) || 0)
+const sellProfit    = computed(() => sellRevenue.value - sellCostBasis.value)
+const sellPPH       = computed(() =>
+  sellForm.priceMode === 'each'
+    ? Number(sellForm.price)
+    : sellForm.quantity > 0 ? Number(sellForm.price) / sellForm.quantity : 0
 )
 
-function openSell(a) {
-  sellTarget.value = a
-  Object.assign(sellForm, { soldFor: '', soldTo: '', soldDate: today })
+function openSell(batch) {
+  sellTarget.value = batch
+  Object.assign(sellForm, {
+    quantity: 1,
+    priceMode: 'each',
+    price: '',
+    sexSold: batch.sex === 'Mixed' ? 'Mixed' : batch.sex,
+    soldTo: '',
+    soldDate: today,
+  })
 }
 
 async function doSell() {
-  if (!sellForm.soldFor) { ui.showToast('⚠️ Enter sold price'); return }
-  if (sellingSaving.value) return
-  sellingSaving.value = true
+  if (!sellForm.price || sellSaving.value) return
+  sellSaving.value = true
   try {
-    await animalStore.sellAnimal({ animal: sellTarget.value, soldFor: sellForm.soldFor, soldTo: sellForm.soldTo, soldDate: sellForm.soldDate })
-    ui.showToast('💰 Animal sold & recorded!')
+    await animalStore.sellFromBatch({
+      batchId:      sellTarget.value.id,
+      quantity:     sellForm.quantity,
+      pricePerHead: sellPPH.value,
+      soldTo:       sellForm.soldTo,
+      soldDate:     sellForm.soldDate,
+      sexSold:      sellForm.sexSold,
+    })
+    ui.showToast(`💰 ${sellForm.quantity} ${sellTarget.value.type}s sold!`)
     sellTarget.value = null
   } finally {
-    sellingSaving.value = false
+    sellSaving.value = false
   }
 }
 
-// ── DELETE ────────────────────────────────────────────
+// ── DEATH ─────────────────────────────────────────────────────────────────────
+const deathTarget = ref(null)
+const deathSaving = ref(false)
+const deathForm   = reactive({ quantity: 1, cause: 'Disease', date: today })
+
+function openDeath(batch) {
+  deathTarget.value = batch
+  Object.assign(deathForm, { quantity: 1, cause: 'Disease', date: today })
+}
+
+async function doDeath() {
+  if (deathSaving.value) return
+  deathSaving.value = true
+  try {
+    await animalStore.recordDeaths({
+      batchId:  deathTarget.value.id,
+      quantity: deathForm.quantity,
+      cause:    deathForm.cause,
+      date:     deathForm.date,
+    })
+    ui.showToast(`🙏 ${deathForm.quantity} death${deathForm.quantity > 1 ? 's' : ''} recorded`)
+    deathTarget.value = null
+  } finally {
+    deathSaving.value = false
+  }
+}
+
+// ── FLAG ──────────────────────────────────────────────────────────────────────
+const flagTarget = ref(null)
+const flagForm   = reactive({ name: '', sex: 'Female', health: 'Pregnant', notes: '' })
+
+function openFlag(batch) {
+  flagTarget.value = batch
+  Object.assign(flagForm, { name: '', sex: 'Female', health: 'Pregnant', notes: '' })
+}
+
+async function doFlag() {
+  if (!flagForm.name.trim()) { ui.showToast('⚠️ Enter a name or tag'); return }
+  await animalStore.flagIndividual({
+    batchId: flagTarget.value.id,
+    ...flagForm,
+  })
+  ui.showToast('🚩 Individual flagged!')
+  flagTarget.value = null
+}
+
+// ── EDIT BATCH ─────────────────────────────────────────────────────────────────
+const editTarget = ref(null)
+const editForm   = reactive({ label: '', type: '', sex: '', currentCount: 0, pricePerHead: 0, health: '', notes: '' })
+
+function openEdit(batch) {
+  editTarget.value = batch
+  Object.assign(editForm, {
+    label: batch.label,
+    type: batch.type,
+    sex: batch.sex,
+    currentCount: batch.currentCount,
+    pricePerHead: batch.pricePerHead,
+    health: batch.health,
+    notes: batch.notes || '',
+  })
+}
+
+async function doEdit() {
+  await animalStore.updateBatch(editTarget.value.id, { ...editForm })
+  ui.showToast('✅ Batch updated!')
+  editTarget.value = null
+}
+
+// ── EDIT FLAGGED ───────────────────────────────────────────────────────────────
+const editFlaggedTarget = ref(null)
+const editFlaggedForm   = reactive({ name: '', sex: '', health: '', notes: '' })
+
+function openEditFlagged(f) {
+  editFlaggedTarget.value = f
+  Object.assign(editFlaggedForm, { name: f.name, sex: f.sex, health: f.health, notes: f.notes || '' })
+}
+
+async function doEditFlagged() {
+  await animalStore.updateFlagged(editFlaggedTarget.value.id, { ...editFlaggedForm })
+  ui.showToast('✅ Updated!')
+  editFlaggedTarget.value = null
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
 const deleteTarget = ref(null)
-function confirmDelete(a) { deleteTarget.value = a }
+function confirmDelete(batch) { deleteTarget.value = batch }
 async function doDelete() {
-  await animalStore.removeAnimal(deleteTarget.value.id)
-  ui.showToast('🗑️ Animal removed')
+  await animalStore.removeBatch(deleteTarget.value.id)
+  ui.showToast('🗑️ Batch removed')
   deleteTarget.value = null
 }
 </script>
 
 <style scoped>
-.top-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-.filter-bar { display: flex; gap: 8px; overflow-x: auto; flex: 1; }
+/* HEADER */
+.header-counts {
+  display: flex; gap: 10px;
+  color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 600;
+  padding-top: 6px;
+}
+.cols-3 { grid-template-columns: 1fr 1fr 1fr !important; }
+.cols-3 .header-stat-val { font-size: 15px; }
+.cols-3 .header-stat-label { font-size: 10px; }
+
+/* FILTER */
+.filter-bar {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding-bottom: 4px; margin-bottom: 16px;
+}
 .filter-bar::-webkit-scrollbar { display: none; }
 .filter-chip {
   flex-shrink: 0; padding: 7px 16px; border-radius: 20px;
   font-size: 12px; font-weight: 500; cursor: pointer;
   border: 1.5px solid var(--border); background: var(--surface); color: var(--muted);
-  font-family: 'Outfit', sans-serif; transition: all 0.15s;
-}
-.filter-chip.active { background: var(--green); border-color: var(--green); color: #fff; }
-.bulk-btn {
-  flex-shrink: 0; padding: 7px 14px; border-radius: 20px;
-  font-size: 12px; font-weight: 600; cursor: pointer;
-  border: 1.5px solid var(--green); background: transparent; color: var(--green);
   font-family: 'Outfit', sans-serif; transition: all 0.15s; white-space: nowrap;
 }
-.bulk-btn.active { border-color: var(--red); color: var(--red); }
+.filter-chip.active { background: var(--green); border-color: var(--green); color: #fff; }
 
-/* BULK BAR */
-.bulk-bar {
-  background: var(--surface); border: 1px solid var(--green);
-  border-radius: 12px; padding: 12px 14px;
+/* BATCH LIST */
+.batch-list { display: flex; flex-direction: column; gap: 12px; }
+.batch-card { padding: 0; overflow: hidden; }
+
+.batch-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 14px; gap: 10px;
+  padding: 16px 16px 0; cursor: pointer;
 }
-.bulk-info { font-size: 13px; color: var(--muted); }
-.bulk-info strong { color: var(--green); }
-.bulk-actions { display: flex; gap: 8px; }
-.bulk-select-all {
-  padding: 7px 12px; border-radius: 8px; font-size: 11px; font-weight: 600;
-  border: 1px solid var(--border); background: var(--bg2); color: var(--muted);
-  font-family: 'Outfit', sans-serif; cursor: pointer;
-}
-.bulk-sell-btn {
-  padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 700;
-  border: none; background: var(--green); color: #fff;
-  font-family: 'Outfit', sans-serif; cursor: pointer;
-}
-.bulk-sell-btn:disabled { opacity: 0.4; cursor: default; }
+.batch-left  { display: flex; align-items: center; gap: 12px; }
+.batch-emoji { font-size: 32px; flex-shrink: 0; }
+.batch-title-group { flex: 1; }
+.batch-label { font-weight: 700; font-size: 16px; line-height: 1.2; }
+.batch-meta  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.batch-right { text-align: right; flex-shrink: 0; }
+.batch-count { font-size: 32px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; color: var(--green); }
+.batch-count-label { font-size: 10px; color: var(--muted); }
 
-/* LIST */
-.animal-list { display: flex; flex-direction: column; gap: 10px; }
-.animal-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; transition: all 0.15s; }
-.animal-item.selectable { cursor: pointer; user-select: none; }
-.animal-item.selected { border-color: var(--green) !important; background: var(--green-pale) !important; }
-.ai-emoji { font-size: 30px; flex-shrink: 0; padding-top: 2px; }
-.ai-info  { flex: 1; min-width: 0; }
-.ai-name  { font-weight: 600; font-size: 15px; }
-.ai-meta  { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.ai-tags  { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
-.ai-notes { font-size: 11px; color: var(--muted); margin-top: 6px; }
-.ai-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-.icon-btn {
-  width: 30px; height: 30px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; font-size: 14px;
-  cursor: pointer; border: 1px solid var(--border); background: var(--bg2); transition: all 0.15s;
+.batch-stats {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 12px 16px 0;
 }
-.icon-btn:active { transform: scale(0.92); }
-.icon-btn.red   { border-color: var(--red);   background: var(--red-pale); }
-.icon-btn.green { border-color: var(--green); background: var(--green-pale); }
+.bs-pill {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg2); border-radius: 20px;
+  padding: 4px 10px; font-size: 11px; color: var(--muted);
+}
+.bs-icon { font-size: 12px; }
 
-/* CHECKBOX */
-.bulk-check { flex-shrink: 0; display: flex; align-items: center; padding-top: 4px; }
-.check-circle {
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 2px solid var(--border); background: var(--bg2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: #fff; transition: all 0.15s;
+.cost-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px 0;
+  font-size: 12px;
 }
-.check-circle.checked { background: var(--green); border-color: var(--green); }
+.cost-label { color: var(--muted); }
+.cost-val   { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text); }
 
-/* EDIT FORM */
-.edit-form { width: 100%; }
-.edit-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; color: var(--muted); }
-.edit-actions { display: flex; gap: 8px; margin-top: 12px; }
-.btn-cancel {
-  flex: 1; padding: 10px; border-radius: 10px;
-  border: 1.5px solid var(--border); background: var(--bg2);
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+/* FLAGGED STRIP */
+.flagged-strip {
+  margin: 10px 16px 0;
+  background: var(--purple-pale); border-radius: 10px;
+  padding: 10px 12px;
 }
-.btn-save {
-  flex: 2; padding: 10px; border-radius: 10px; border: none; background: var(--green);
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;
+.flagged-title { font-size: 11px; font-weight: 700; color: var(--purple); margin-bottom: 8px; }
+.flagged-list  { display: flex; flex-direction: column; gap: 6px; }
+.flagged-item  { display: flex; align-items: center; gap: 8px; }
+.fi-name       { flex: 1; font-size: 13px; font-weight: 500; }
+.fi-remove     {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,0.1); color: var(--muted);
+  cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
 }
 
-/* OVERLAYS */
-.confirm-overlay {
+.batch-notes {
+  padding: 8px 16px 0; font-size: 12px; color: var(--muted);
+}
+
+/* BATCH ACTIONS */
+.batch-actions {
+  display: flex; gap: 6px; padding: 14px 16px;
+  flex-wrap: wrap;
+}
+.act-btn {
+  padding: 7px 12px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: 'Outfit', sans-serif; border: 1.5px solid;
+  transition: all 0.15s; white-space: nowrap;
+}
+.act-btn:active { transform: scale(0.95); }
+.act-btn.sell   { background: var(--green-pale);  border-color: var(--green);  color: var(--green); }
+.act-btn.death  { background: var(--red-pale);    border-color: var(--red);    color: var(--red); }
+.act-btn.flag   { background: var(--purple-pale); border-color: var(--purple); color: var(--purple); }
+.act-btn.edit   { background: var(--bg2);         border-color: var(--border); color: var(--muted); }
+.act-btn.delete { background: var(--bg2);         border-color: var(--border); color: var(--red); padding: 7px 10px; }
+
+/* SOLD MINI */
+.section-link { font-size: 12px; color: var(--green); cursor: pointer; font-weight: 500; }
+.sold-mini { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.sold-mini-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.sm-emoji  { font-size: 20px; }
+.sm-info   { flex: 1; }
+.sm-label  { font-size: 13px; font-weight: 500; }
+.sm-date   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sm-profit { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; }
+.sm-profit.pos { color: var(--green); }
+.sm-profit.neg { color: var(--red); }
+
+/* SOLD FULL */
+.sold-full-list { display: flex; flex-direction: column; gap: 10px; }
+.sold-card { padding: 14px 16px; }
+.sc-top    { display: flex; align-items: center; gap: 10px; }
+.sc-emoji  { font-size: 26px; }
+.sc-info   { flex: 1; }
+.sc-label  { font-weight: 600; font-size: 14px; }
+.sc-meta   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sc-profit { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+.sc-profit.pos { color: var(--green); }
+.sc-profit.neg { color: var(--red); }
+.sc-prices {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bg2);
+  font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+}
+.sc-arrow { color: var(--green); font-weight: 700; }
+.sc-pph   { color: var(--muted); font-size: 10px; }
+
+/* FLAGGED FULL */
+.flagged-full-list { display: flex; flex-direction: column; gap: 10px; }
+.flagged-card { padding: 14px 16px; }
+.fc-top   { display: flex; align-items: center; gap: 10px; }
+.fc-emoji { font-size: 26px; }
+.fc-info  { flex: 1; }
+.fc-name  { font-weight: 600; font-size: 14px; }
+.fc-batch { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.fc-detail { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.fc-date   { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+.fc-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* OVERLAYS / MODALS */
+.overlay {
   position: fixed; inset: 0; z-index: 400;
   background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center; padding: 24px;
+  display: flex; align-items: flex-end;
 }
-.confirm-box {
-  background: var(--surface); border-radius: 20px;
-  padding: 24px 20px; width: 100%; max-width: 340px;
-  max-height: 88vh; overflow-y: auto;
-}
-.bulk-sell-box { max-width: 380px; }
-.confirm-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
-.confirm-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; text-align: center; }
-.confirm-msg   { font-size: 13px; color: var(--muted); margin-bottom: 16px; text-align: center; }
-.confirm-btns  { display: flex; gap: 10px; margin-top: 16px; }
-.optional { font-size: 11px; color: var(--muted); font-weight: 400; }
+.confirm-overlay { align-items: center; justify-content: center; padding: 24px; }
 
-/* BULK PREVIEW */
-.bulk-preview {
-  max-height: 130px; overflow-y: auto;
-  background: var(--bg2); border-radius: 10px; padding: 8px 10px;
-  display: flex; flex-direction: column; gap: 6px;
+.modal-sheet {
+  background: var(--surface); border-radius: 24px 24px 0 0;
+  width: 100%; max-width: 430px; margin: 0 auto;
+  padding: 16px 20px 40px;
+  max-height: 92vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0;
 }
-.bp-item  { display: flex; align-items: center; gap: 8px; }
-.bp-emoji { font-size: 16px; }
-.bp-name  { flex: 1; font-size: 13px; font-weight: 500; }
-.bp-cost  { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.modal-handle {
+  width: 40px; height: 4px; border-radius: 2px;
+  background: var(--border); margin: 0 auto 20px; flex-shrink: 0;
+}
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.modal-info-row {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--muted);
+  background: var(--bg2); border-radius: 8px; padding: 8px 12px;
+  margin-bottom: 14px;
+}
 
-/* PRICE MODE */
-.price-mode-row { display: flex; gap: 6px; background: var(--bg2); border-radius: 10px; padding: 4px; }
-.mode-btn {
-  flex: 1; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 600;
-  border: none; background: none; color: var(--muted);
+/* SEGMENTED CONTROL */
+.seg-ctrl {
+  display: flex; background: var(--bg2); border-radius: 10px;
+  padding: 3px; gap: 2px;
+}
+.seg-btn {
+  flex: 1; padding: 8px; border-radius: 8px; border: none;
+  font-size: 12px; font-weight: 600; color: var(--muted);
   font-family: 'Outfit', sans-serif; cursor: pointer; transition: all 0.15s;
+  background: none;
 }
-.mode-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.seg-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 
-/* SELL FORM */
-.sell-form { display: flex; flex-direction: column; gap: 12px; }
-.profit-preview { background: var(--bg2); border-radius: 10px; padding: 12px 14px; }
-.pp-row   { display: flex; align-items: center; justify-content: space-between; }
-.pp-label { font-size: 12px; color: var(--muted); }
-.pp-val   { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+/* QTY */
+.qty-row { display: flex; align-items: center; gap: 10px; }
+.qty-btn {
+  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  font-size: 22px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.qty-btn:active { background: var(--border); }
+.qty-input { text-align: center; font-size: 18px !important; font-weight: 700 !important; }
+.qty-hint  { font-size: 12px; color: var(--muted); margin-top: 6px; background: var(--bg2); border-radius: 8px; padding: 7px 10px; }
+.qty-hint strong { color: var(--text); }
+
+/* PROFIT PREVIEW */
+.profit-preview {
+  background: var(--bg2); border-radius: 10px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pp-row     { display: flex; justify-content: space-between; align-items: center; }
+.pp-label   { font-size: 12px; color: var(--muted); }
+.pp-val     { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; }
+.pp-muted   { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
 .pp-val.pos { color: var(--green); }
 .pp-val.neg { color: var(--red); }
+.total-row  { padding-top: 8px; border-top: 1px solid var(--border); }
 
-.btn-sell {
-  flex: 2; padding: 12px; border-radius: 10px; border: none; background: var(--green);
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+/* CONFIRM */
+.confirm-box {
+  background: var(--surface); border-radius: 20px;
+  padding: 24px 20px; width: 100%; max-width: 320px;
 }
-.btn-sell:disabled { opacity: 0.5; cursor: default; }
+.confirm-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
+.confirm-title { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+.confirm-msg   { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; }
+.confirm-btns  { display: flex; gap: 10px; }
+
+/* BUTTONS */
+.btn-full {
+  width: 100%; padding: 14px; border-radius: 12px; border: none;
+  background: var(--green); color: #fff; font-family: 'Outfit', sans-serif;
+  font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px;
+  transition: opacity 0.15s;
+}
+.btn-full:disabled { opacity: 0.45; cursor: default; }
+.btn-full.danger   { background: var(--red); }
+
+.btn-cancel {
+  flex: 1; padding: 11px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--muted); cursor: pointer;
+}
+.btn-save {
+  flex: 2; padding: 11px; border-radius: 10px; border: none;
+  background: var(--green); font-family: 'Outfit', sans-serif;
+  font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+}
 .btn-delete {
-  flex: 2; padding: 12px; border-radius: 10px; border: none; background: var(--red);
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+  flex: 2; padding: 11px; border-radius: 10px; border: none;
+  background: var(--red); font-family: 'Outfit', sans-serif;
+  font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
 }
+.edit-actions { display: flex; gap: 8px; margin-top: 8px; }
 
-.slide-down-enter-active, .slide-down-leave-active { transition: all 0.2s ease; }
-.slide-down-enter-from, .slide-down-leave-to { opacity: 0; transform: translateY(-8px); }
+/* OPTIONAL */
+.optional { font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* TRANSITIONS */
+.modal-slide-enter-active, .modal-slide-leave-active { transition: all 0.25s ease; }
+.modal-slide-enter-from .modal-sheet,
+.modal-slide-leave-to .modal-sheet { transform: translateY(100%); }
+.modal-slide-enter-from, .modal-slide-leave-to { opacity: 0; }
+
 .confirm-enter-active, .confirm-leave-active { transition: all 0.2s ease; }
 .confirm-enter-from, .confirm-leave-to { opacity: 0; }
 .confirm-enter-from .confirm-box, .confirm-leave-to .confirm-box { transform: scale(0.92); }

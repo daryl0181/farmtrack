@@ -15,38 +15,31 @@ import { db } from "@/firebase";
 export const useBreedingStore = defineStore("breeding", () => {
   const pregnancies = ref([]);
   const birthRecords = ref([]);
-  let unsubPregnancies = null;
-  let unsubBirthRecords = null;
+  let unsubPregnancies = null,
+    unsubBirthRecords = null;
 
-  // ── LISTENERS ──────────────────────────────────────────
+  // ── LISTENERS ──────────────────────────────────────────────────────────────
   function startListener() {
     unsubPregnancies = onSnapshot(
       query(collection(db, "pregnancies"), orderBy("mateDate", "desc")),
-      (snapshot) => {
-        pregnancies.value = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+      (snap) => {
+        pregnancies.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       },
     );
-
     unsubBirthRecords = onSnapshot(
       query(collection(db, "birthRecords"), orderBy("birthDate", "desc")),
-      (snapshot) => {
-        birthRecords.value = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+      (snap) => {
+        birthRecords.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       },
     );
   }
 
   function stopListener() {
-    if (unsubPregnancies) unsubPregnancies();
-    if (unsubBirthRecords) unsubBirthRecords();
+    unsubPregnancies?.();
+    unsubBirthRecords?.();
   }
 
-  // ── COMPUTED ───────────────────────────────────────────
+  // ── COMPUTED ───────────────────────────────────────────────────────────────
   const pregnancyCount = computed(() => pregnancies.value.length);
 
   const pregnanciesWithProgress = computed(() => {
@@ -67,11 +60,22 @@ export const useBreedingStore = defineStore("breeding", () => {
       .filter((p) => p.daysLeft <= 14)
       .map((p) => ({
         type: "warn",
-        msg: `<strong>${p.goatName}</strong> is due in ${p.daysLeft} days! Prepare the birthing area. 🐐`,
+        msg: `<strong>${p.goatName}</strong> is due in ${p.daysLeft} day${p.daysLeft !== 1 ? "s" : ""}! Prepare the birthing area. 🐐`,
       })),
   );
 
-  // ── ACTIONS ────────────────────────────────────────────
+  // Total kids born across all records
+  const totalKidsBorn = computed(() =>
+    birthRecords.value.reduce((s, b) => s + (b.kidsCount || 0), 0),
+  );
+
+  // ── ACTIONS ────────────────────────────────────────────────────────────────
+  /**
+   * data: {
+   *   goatName, mateDate, expectedKids,
+   *   motherBreed, fatherBreed, offspringBreed
+   * }
+   */
   async function addPregnancy(data) {
     const mate = new Date(data.mateDate);
     const birth = new Date(mate);
@@ -85,28 +89,46 @@ export const useBreedingStore = defineStore("breeding", () => {
       expectedBirth: birth.toISOString().slice(0, 10),
       midDate: mid.toISOString().slice(0, 10),
       expectedKids: Number(data.expectedKids),
+      motherBreed: data.motherBreed || "",
+      fatherBreed: data.fatherBreed || "",
+      offspringBreed: data.offspringBreed || "",
     });
   }
 
-  async function recordBirth({ pregnancyId, birthDate, maleKids, femaleKids }) {
+  /**
+   * data: {
+   *   pregnancyId, birthDate, maleKids, femaleKids, offspringBreed
+   * }
+   */
+  async function recordBirth({
+    pregnancyId,
+    birthDate,
+    maleKids,
+    femaleKids,
+    offspringBreed,
+  }) {
     const p = pregnancies.value.find((x) => x.id === pregnancyId);
-    if (p) {
-      await addDoc(collection(db, "birthRecords"), {
-        goatName: p.goatName,
-        birthDate,
-        kidsCount: maleKids + femaleKids,
-        maleKids: Number(maleKids),
-        femaleKids: Number(femaleKids),
-      });
-      await deleteDoc(doc(db, "pregnancies", pregnancyId));
-    }
+    if (!p) return;
+
+    await addDoc(collection(db, "birthRecords"), {
+      goatName: p.goatName,
+      birthDate,
+      kidsCount: Number(maleKids) + Number(femaleKids),
+      maleKids: Number(maleKids),
+      femaleKids: Number(femaleKids),
+      motherBreed: p.motherBreed || "",
+      fatherBreed: p.fatherBreed || "",
+      offspringBreed: offspringBreed || p.offspringBreed || "",
+    });
+
+    await deleteDoc(doc(db, "pregnancies", pregnancyId));
   }
 
   async function removePregnancy(id) {
     await deleteDoc(doc(db, "pregnancies", id));
   }
 
-  // ── HELPERS ────────────────────────────────────────────
+  // ── HELPERS ────────────────────────────────────────────────────────────────
   function expectedBirthFromDate(mateDateStr) {
     if (!mateDateStr) return "—";
     const d = new Date(mateDateStr);
@@ -124,6 +146,7 @@ export const useBreedingStore = defineStore("breeding", () => {
     pregnancyCount,
     pregnanciesWithProgress,
     alerts,
+    totalKidsBorn,
     startListener,
     stopListener,
     addPregnancy,
