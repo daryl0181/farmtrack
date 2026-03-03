@@ -277,7 +277,7 @@
 import { ref, reactive, computed } from 'vue'
 import PageHeader    from '@/components/PageHeader.vue'
 import PregnancyItem    from '@/components/PregnancyCard.vue'
-import BirthRecordCard from '@/components/BirthRecordCard.vue'
+import BirthRecordCard from '@/components/BirthCard.vue'
 import { useBreedingStore } from '@/stores/breeding' 
 import { useAnimalStore }   from '@/stores/animals'
 import { useUIStore }       from '@/stores/ui'
