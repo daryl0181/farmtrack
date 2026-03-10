@@ -44,6 +44,22 @@
       <!-- ═══════════════════════════════════════════════════════════ -->
       <template v-if="activeTab === 'goats'">
 
+        <!-- GOAT STATS ROW -->
+        <div class="breed-stats-row" v-if="breedingStore.birthRecords.length">
+          <div class="bsr-card card">
+            <div class="bsr-val">{{ breedingStore.totalKidsBorn }}</div>
+            <div class="bsr-label">Total Kids Born</div>
+          </div>
+          <div class="bsr-card card">
+            <div class="bsr-val">{{ breedingStore.avgLitterSize }}</div>
+            <div class="bsr-label">Avg Litter Size</div>
+          </div>
+          <div class="bsr-card card">
+            <div class="bsr-val">{{ breedingStore.birthRecords.length }}</div>
+            <div class="bsr-label">Births Recorded</div>
+          </div>
+        </div>
+
         <div class="sub-tabs">
           <button :class="['sub-tab', goatSub === 'pregnancies' ? 'active' : '']" @click="goatSub = 'pregnancies'">
             Pregnancies
@@ -62,12 +78,70 @@
         <!-- PREGNANCIES -->
         <template v-if="goatSub === 'pregnancies'">
           <div v-if="breedingStore.pregnanciesWithProgress.length" class="preg-list">
-            <PregnancyItem
+            <div
+              class="preg-card card"
               v-for="p in breedingStore.pregnanciesWithProgress"
               :key="p.id"
-              :pregnancy="p"
-              @record-birth="openBirth"
-            />
+            >
+              <!-- HEADER -->
+              <div class="pc-header">
+                <div class="pc-left">
+                  <div class="pc-icon-wrap" :class="p.urgency">🐐</div>
+                  <div class="pc-info">
+                    <div class="pc-name">{{ p.goatName }}</div>
+                    <div class="pc-breed" v-if="p.motherBreed">
+                      ♀ {{ p.motherBreed }}
+                      <span v-if="p.fatherBreed"> × ♂ {{ p.fatherBreed }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="pc-countdown" :class="p.urgency">
+                  <div class="pc-days">
+                    <span v-if="p.urgency === 'today'">TODAY</span>
+                    <span v-else-if="p.daysLeft < 0">{{ Math.abs(p.daysLeft) }}d<br><span class="pc-overdue">overdue</span></span>
+                    <span v-else>{{ p.daysLeft }}d</span>
+                  </div>
+                  <div class="pc-days-sub" v-if="p.urgency !== 'today' && p.daysLeft >= 0">left</div>
+                </div>
+              </div>
+
+              <!-- PROGRESS BAR -->
+              <div class="pc-progress-wrap">
+                <div class="pc-progress-track">
+                  <div class="pc-progress-fill" :style="{ width: p.progress + '%' }" :class="p.urgency" />
+                </div>
+                <div class="pc-progress-labels">
+                  <span>Mated {{ p.mateDate }}</span>
+                  <span class="pc-pct">{{ p.progress }}% gestation</span>
+                  <span>Due {{ p.expectedBirth }}</span>
+                </div>
+              </div>
+
+              <!-- TRIMESTER + DETAILS -->
+              <div class="pc-meta-row">
+                <div class="pc-meta-item">
+                  <span class="pc-meta-icon">📅</span>
+                  <span>{{ breedingStore.trimesterLabel(p.trimester) }}</span>
+                </div>
+                <div class="pc-meta-item" v-if="p.expectedKids">
+                  <span class="pc-meta-icon">🐣</span>
+                  <span>{{ p.expectedKids }} expected kid{{ p.expectedKids > 1 ? 's' : '' }}</span>
+                </div>
+                <div class="pc-meta-item" v-if="p.offspringBreed">
+                  <span class="pc-meta-icon">🧬</span>
+                  <span>{{ p.offspringBreed }}</span>
+                </div>
+              </div>
+
+              <div class="pc-notes" v-if="p.notes">📝 {{ p.notes }}</div>
+
+              <!-- ACTIONS -->
+              <div class="pc-actions">
+                <button class="pc-btn birth" @click="openBirth(p)">🐣 Record Birth</button>
+                <button class="pc-btn edit"  @click="openEditPregnancy(p)">✏️</button>
+                <button class="pc-btn del"   @click="confirmRemovePregnancy(p)">🗑️</button>
+              </div>
+            </div>
           </div>
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🐐</div>
@@ -78,11 +152,30 @@
         <!-- BIRTH RECORDS -->
         <template v-if="goatSub === 'births'">
           <div v-if="breedingStore.birthRecords.length" class="births-list">
-            <BirthRecordCard
-              v-for="b in breedingStore.birthRecords"
-              :key="b.id"
-              :record="b"
-            />
+            <div class="birth-card card" v-for="b in breedingStore.birthRecords" :key="b.id">
+              <div class="bc-top">
+                <div class="bc-icon">🐣</div>
+                <div class="bc-info">
+                  <div class="bc-name">{{ b.goatName }}</div>
+                  <div class="bc-meta">{{ b.birthDate }}</div>
+                  <div class="bc-breed" v-if="b.offspringBreed">🧬 {{ b.offspringBreed }}</div>
+                  <div class="bc-parents" v-if="b.motherBreed && b.fatherBreed">
+                    ♀ {{ b.motherBreed }} × ♂ {{ b.fatherBreed }}
+                  </div>
+                </div>
+                <div class="bc-kids-wrap">
+                  <div class="bc-total-kids">{{ b.kidsCount }}</div>
+                  <div class="bc-kids-label">kids</div>
+                </div>
+              </div>
+              <div class="bc-kids">
+                <div class="kid-pill male" v-if="b.maleKids > 0">♂ {{ b.maleKids }} male</div>
+                <div class="kid-pill female" v-if="b.femaleKids > 0">♀ {{ b.femaleKids }} female</div>
+                <div class="kid-pill total">{{ b.kidsCount }} total</div>
+              </div>
+              <div class="bc-notes" v-if="b.notes">📝 {{ b.notes }}</div>
+              <button class="bc-del" @click="confirmRemoveBirth(b)">🗑️ Remove Record</button>
+            </div>
           </div>
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🐣</div>
@@ -134,6 +227,13 @@
                   <div class="fec-label">Last Logged</div>
                 </div>
               </div>
+              <!-- WEEKLY LAY RATE BAR -->
+              <div class="lay-rate-bar" v-if="avgLayRateForBatch(b) > 0">
+                <div class="lrb-track">
+                  <div class="lrb-fill" :style="{ width: Math.min(100, avgLayRateForBatch(b)) + '%' }" />
+                </div>
+                <span class="lrb-label">{{ avgLayRateForBatch(b) }}% lay rate</span>
+              </div>
             </div>
           </div>
 
@@ -141,7 +241,7 @@
 
           <div class="section-title" style="margin-top:20px;">
             All Egg Records
-            <span class="total-eggs-badge">{{ animalStore.totalEggsProduced }} total eggs</span>
+            <span class="total-eggs-badge">{{ animalStore.totalEggsProduced }} total</span>
           </div>
           <div class="egg-list" v-if="animalStore.eggRecords.length">
             <div class="egg-item card" v-for="r in animalStore.eggRecords" :key="r.id">
@@ -155,12 +255,12 @@
                 <div class="ei-count">{{ r.eggsCollected }}</div>
                 <div class="ei-label">eggs</div>
               </div>
-              <button class="ei-del" @click="animalStore.removeEggRecord(r.id)">×</button>
+              <button class="ei-del" @click="animalStore.removeEggRecord(r.id)" title="Delete">×</button>
             </div>
           </div>
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🥚</div>
-            <div class="empty-state-text">No egg records yet.<br>Tap "Log Today's Eggs" to start tracking.</div>
+            <div class="empty-state-text">No egg records yet.<br>Tap "Log Today's Eggs" to start.</div>
           </div>
         </template>
 
@@ -176,7 +276,8 @@
               <div class="hs-label">Hatched</div>
             </div>
             <div class="hatch-sum-card card">
-              <div class="hs-val" :style="{ color: overallHatchRate >= 70 ? 'var(--green)' : overallHatchRate >= 40 ? 'var(--amber)' : 'var(--red)' }">
+              <div class="hs-val"
+                :style="{ color: overallHatchRate >= 70 ? 'var(--green)' : overallHatchRate >= 40 ? 'var(--amber)' : 'var(--red)' }">
                 {{ overallHatchRate }}%
               </div>
               <div class="hs-label">Hatch Rate</div>
@@ -199,17 +300,18 @@
                   </div>
                 </div>
                 <div class="hc-rate-wrap">
-                  <div class="hc-rate" :style="{ color: hatchRateOf(h) >= 70 ? 'var(--green)' : hatchRateOf(h) >= 40 ? 'var(--amber)' : 'var(--red)' }">
+                  <div class="hc-rate"
+                    :style="{ color: hatchRateOf(h) >= 70 ? 'var(--green)' : hatchRateOf(h) >= 40 ? 'var(--amber)' : 'var(--red)' }">
                     {{ hatchRateOf(h) }}%
                   </div>
                   <div class="hc-rate-label">hatch rate</div>
                 </div>
               </div>
               <div class="hc-stats">
-                <div class="hc-stat"><span class="hcs-icon">🥚</span><span>{{ h.eggsSet }} set</span></div>
+                <div class="hc-stat"><span>🥚</span><span>{{ h.eggsSet }} set</span></div>
                 <span class="hcs-arrow">→</span>
-                <div class="hc-stat success"><span class="hcs-icon">🐥</span><span>{{ h.hatched }} hatched</span></div>
-                <div class="hc-stat fail" v-if="h.failedToHatch > 0"><span class="hcs-icon">❌</span><span>{{ h.failedToHatch }} failed</span></div>
+                <div class="hc-stat success"><span>🐥</span><span>{{ h.hatched }} hatched</span></div>
+                <div class="hc-stat fail" v-if="h.failedToHatch > 0"><span>❌</span><span>{{ h.failedToHatch }} failed</span></div>
               </div>
               <div class="hc-notes" v-if="h.notes">{{ h.notes }}</div>
               <button class="hc-del" @click="animalStore.removeHatchRecord(h.id)">🗑️ Remove</button>
@@ -217,7 +319,7 @@
           </div>
           <div class="empty-state" v-else>
             <div class="empty-state-icon">🐥</div>
-            <div class="empty-state-text">No hatch records yet.<br>Tap "Record a Hatch" to log chicks.</div>
+            <div class="empty-state-text">No hatch records yet.</div>
           </div>
         </template>
 
@@ -259,12 +361,89 @@
           <div class="offspring-preview" v-if="birthTarget.offspringBreed">
             🧬 These kids will be: <strong>{{ birthTarget.offspringBreed }}</strong>
           </div>
+          <div class="form-group" style="margin-top:4px;">
+            <label class="form-label">Notes <span class="optional">(optional)</span></label>
+            <input class="form-input" v-model="birthForm.notes" placeholder="e.g. healthy, stillborn, etc." />
+          </div>
+          <!-- Add to batch option -->
+          <div class="add-batch-toggle" v-if="birthTarget.batchId">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="birthForm.addToAnimalBatch" />
+              <span>Add {{ birthForm.maleKids + birthForm.femaleKids }} kids to animal batch count</span>
+            </label>
+          </div>
           <div class="total-kids-row" v-if="birthForm.maleKids + birthForm.femaleKids > 0">
             🐐 {{ birthForm.maleKids + birthForm.femaleKids }} kid{{ birthForm.maleKids + birthForm.femaleKids > 1 ? 's' : '' }} born
           </div>
-          <button class="btn-full" @click="doBirth" :disabled="birthForm.maleKids + birthForm.femaleKids === 0">
-            Confirm Birth
+          <button class="btn-full" @click="doBirth" :disabled="birthSaving || birthForm.maleKids + birthForm.femaleKids === 0">
+            {{ birthSaving ? 'Saving…' : 'Confirm Birth' }}
           </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- EDIT PREGNANCY MODAL -->
+    <Transition name="modal-slide">
+      <div class="overlay" v-if="editPregnancyTarget" @click.self="editPregnancyTarget = null">
+        <div class="modal-sheet">
+          <div class="modal-handle" />
+          <h2 class="modal-title">✏️ Edit Pregnancy</h2>
+          <div class="form-group">
+            <label class="form-label">Goat Name</label>
+            <input class="form-input" v-model="editPregForm.goatName" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Expected Birth Date</label>
+            <input class="form-input" type="date" v-model="editPregForm.expectedBirth" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Expected Kids</label>
+            <input class="form-input" type="number" v-model.number="editPregForm.expectedKids" min="1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input class="form-input" v-model="editPregForm.notes" />
+          </div>
+          <div class="edit-actions">
+            <button class="btn-cancel" @click="editPregnancyTarget = null">Cancel</button>
+            <button class="btn-save" @click="doEditPregnancy">Save</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- REMOVE PREGNANCY CONFIRM -->
+    <Transition name="confirm">
+      <div class="overlay confirm-overlay" v-if="removePregnancyTarget" @click.self="removePregnancyTarget = null">
+        <div class="confirm-box">
+          <div class="confirm-icon">🗑️</div>
+          <div class="confirm-title">Remove Pregnancy?</div>
+          <div class="confirm-msg">
+            Remove pregnancy tracking for <strong>{{ removePregnancyTarget?.goatName }}</strong>?
+            This cannot be undone.
+          </div>
+          <div class="confirm-btns">
+            <button class="btn-cancel" @click="removePregnancyTarget = null">Cancel</button>
+            <button class="btn-delete" @click="doRemovePregnancy">Remove</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- REMOVE BIRTH RECORD CONFIRM -->
+    <Transition name="confirm">
+      <div class="overlay confirm-overlay" v-if="removeBirthTarget" @click.self="removeBirthTarget = null">
+        <div class="confirm-box">
+          <div class="confirm-icon">🗑️</div>
+          <div class="confirm-title">Delete Birth Record?</div>
+          <div class="confirm-msg">
+            Remove birth record for <strong>{{ removeBirthTarget?.goatName }}</strong>
+            ({{ removeBirthTarget?.kidsCount }} kids on {{ removeBirthTarget?.birthDate }})? This cannot be undone.
+          </div>
+          <div class="confirm-btns">
+            <button class="btn-cancel" @click="removeBirthTarget = null">Cancel</button>
+            <button class="btn-delete" @click="doRemoveBirth">Delete</button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -276,9 +455,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import PageHeader    from '@/components/PageHeader.vue'
-import PregnancyItem    from '@/components/PregnancyCard.vue'
-import BirthRecordCard from '@/components/BirthCard.vue'
-import { useBreedingStore } from '@/stores/breeding' 
+import { useBreedingStore } from '@/stores/breeding'
 import { useAnimalStore }   from '@/stores/animals'
 import { useUIStore }       from '@/stores/ui'
 
@@ -336,35 +513,83 @@ const overallHatchRate = computed(() => {
   return Math.round((animalStore.totalHatched / totalEggsSet.value) * 100)
 })
 
-// Birth modal — opened by PregnancyItem emitting 'record-birth'
+// ── BIRTH MODAL ──────────────────────────────────────────────────────────────
 const birthTarget = ref(null)
-const birthForm   = reactive({ birthDate: today, maleKids: 0, femaleKids: 0 })
+const birthSaving = ref(false)
+const birthForm   = reactive({
+  birthDate: today, maleKids: 0, femaleKids: 0,
+  notes: '', addToAnimalBatch: false,
+})
 
 function openBirth(pregnancy) {
   birthTarget.value = pregnancy
-  Object.assign(birthForm, { birthDate: today, maleKids: 0, femaleKids: 0 })
+  Object.assign(birthForm, {
+    birthDate: today, maleKids: 0, femaleKids: 0,
+    notes: '', addToAnimalBatch: !!pregnancy.batchId,
+  })
 }
 
 async function doBirth() {
   const total = birthForm.maleKids + birthForm.femaleKids
-  if (!total) return
-  await breedingStore.recordBirth({
-    pregnancyId:    birthTarget.value.id,
-    birthDate:      birthForm.birthDate,
-    maleKids:       birthForm.maleKids,
-    femaleKids:     birthForm.femaleKids,
-    offspringBreed: birthTarget.value.offspringBreed || '',
+  if (!total || birthSaving.value) return
+  birthSaving.value = true
+  try {
+    await breedingStore.recordBirth({
+      pregnancyId:      birthTarget.value.id,
+      birthDate:        birthForm.birthDate,
+      maleKids:         birthForm.maleKids,
+      femaleKids:       birthForm.femaleKids,
+      offspringBreed:   birthTarget.value.offspringBreed || '',
+      notes:            birthForm.notes,
+      addToAnimalBatch: birthForm.addToAnimalBatch,
+    })
+    ui.showToast(`🐣 ${total} kid${total > 1 ? 's' : ''} born!`)
+    birthTarget.value = null
+  } finally {
+    birthSaving.value = false
+  }
+}
+
+// ── EDIT PREGNANCY ───────────────────────────────────────────────────────────
+const editPregnancyTarget = ref(null)
+const editPregForm = reactive({ goatName: '', expectedBirth: '', expectedKids: 1, notes: '' })
+
+function openEditPregnancy(p) {
+  editPregnancyTarget.value = p
+  Object.assign(editPregForm, {
+    goatName: p.goatName, expectedBirth: p.expectedBirth,
+    expectedKids: p.expectedKids, notes: p.notes || '',
   })
-  ui.showToast(`🐣 ${total} kid${total > 1 ? 's' : ''} born!`)
-  birthTarget.value = null
+}
+
+async function doEditPregnancy() {
+  await breedingStore.updatePregnancy(editPregnancyTarget.value.id, { ...editPregForm })
+  ui.showToast('✅ Updated!')
+  editPregnancyTarget.value = null
+}
+
+// ── REMOVE PREGNANCY ─────────────────────────────────────────────────────────
+const removePregnancyTarget = ref(null)
+function confirmRemovePregnancy(p) { removePregnancyTarget.value = p }
+async function doRemovePregnancy() {
+  await breedingStore.removePregnancy(removePregnancyTarget.value.id)
+  ui.showToast('🗑️ Pregnancy removed')
+  removePregnancyTarget.value = null
+}
+
+// ── REMOVE BIRTH RECORD ──────────────────────────────────────────────────────
+const removeBirthTarget = ref(null)
+function confirmRemoveBirth(b) { removeBirthTarget.value = b }
+async function doRemoveBirth() {
+  await breedingStore.removeBirthRecord(removeBirthTarget.value.id)
+  ui.showToast('🗑️ Birth record removed')
+  removeBirthTarget.value = null
 }
 </script>
 
 <style scoped>
 .header-pills { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; align-items: flex-end; }
-.header-pill  { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
-.header-pill.goat { background: rgba(255,255,255,0.15); color: #fff; }
-.header-pill.duck { background: rgba(255,255,255,0.15); color: #fff; }
+.header-pill  { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.15); color: #fff; }
 .cols-4 { grid-template-columns: repeat(4, 1fr) !important; }
 .cols-4 .header-stat-val   { font-size: 16px; }
 .cols-4 .header-stat-label { font-size: 9px; }
@@ -381,6 +606,12 @@ async function doBirth() {
 }
 .main-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 
+/* BREED STATS */
+.breed-stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.bsr-card { padding: 12px; text-align: center; }
+.bsr-val  { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+.bsr-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
 .sub-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
 .sub-tab {
   flex: 1; padding: 9px 12px; border-radius: 10px; border: none;
@@ -393,22 +624,106 @@ async function doBirth() {
 .sub-count { background: rgba(255,255,255,0.25); border-radius: 8px; font-size: 10px; font-weight: 700; padding: 1px 5px; }
 .sub-tab:not(.active) .sub-count { background: var(--border); color: var(--muted); }
 
-.preg-list   { display: flex; flex-direction: column; gap: 12px; }
-.births-list { display: flex; flex-direction: column; gap: 10px; }
+/* PREGNANCY CARD */
+.preg-list { display: flex; flex-direction: column; gap: 14px; }
+.preg-card { padding: 16px; }
 
+.pc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pc-left   { display: flex; align-items: center; gap: 12px; flex: 1; }
+.pc-icon-wrap {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+}
+.pc-icon-wrap.normal   { background: var(--bg2); }
+.pc-icon-wrap.soon     { background: var(--green-pale); }
+.pc-icon-wrap.critical { background: var(--amber-pale); }
+.pc-icon-wrap.today    { background: var(--amber-pale); }
+.pc-icon-wrap.overdue  { background: var(--red-pale); }
+
+.pc-info   { flex: 1; }
+.pc-name   { font-weight: 700; font-size: 15px; }
+.pc-breed  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+.pc-countdown { text-align: center; flex-shrink: 0; min-width: 50px; }
+.pc-days {
+  font-size: 20px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+  line-height: 1.1;
+}
+.pc-countdown.normal   .pc-days { color: var(--muted); font-size: 14px; }
+.pc-countdown.soon     .pc-days { color: var(--green); }
+.pc-countdown.critical .pc-days { color: var(--amber); }
+.pc-countdown.today    .pc-days { color: var(--amber); font-size: 12px; letter-spacing: -0.5px; }
+.pc-countdown.overdue  .pc-days { color: var(--red); }
+.pc-days-sub { font-size: 9px; color: var(--muted); margin-top: 2px; }
+.pc-overdue { font-size: 9px; }
+
+/* PROGRESS */
+.pc-progress-wrap { margin-top: 14px; }
+.pc-progress-track {
+  height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; margin-bottom: 6px;
+}
+.pc-progress-fill {
+  height: 100%; border-radius: 4px; transition: width 0.6s ease;
+}
+.pc-progress-fill.normal   { background: var(--green); }
+.pc-progress-fill.soon     { background: var(--green); }
+.pc-progress-fill.critical { background: var(--amber); }
+.pc-progress-fill.today    { background: var(--amber); }
+.pc-progress-fill.overdue  { background: var(--red); width: 100% !important; }
+.pc-progress-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+}
+.pc-pct { font-weight: 700; color: var(--text); }
+
+/* META ROW */
+.pc-meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pc-meta-item {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg2); border-radius: 8px; padding: 5px 10px;
+  font-size: 11px; color: var(--muted);
+}
+.pc-meta-icon { font-size: 12px; }
+.pc-notes { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+.pc-actions { display: flex; gap: 8px; margin-top: 14px; }
+.pc-btn {
+  padding: 9px 14px; border-radius: 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: 'Outfit', sans-serif; border: 1.5px solid; transition: all 0.15s;
+}
+.pc-btn:active { transform: scale(0.95); }
+.pc-btn.birth { flex: 1; background: var(--green-pale); border-color: var(--green); color: var(--green); }
+.pc-btn.edit  { background: var(--bg2); border-color: var(--border); color: var(--muted); padding: 9px 12px; }
+.pc-btn.del   { background: var(--bg2); border-color: var(--border); color: var(--red); padding: 9px 12px; }
+
+/* BIRTH RECORDS */
+.births-list { display: flex; flex-direction: column; gap: 12px; }
 .birth-card { padding: 16px; }
-.bc-top  { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.bc-icon { font-size: 26px; }
+.bc-top  { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.bc-icon { font-size: 26px; flex-shrink: 0; }
 .bc-info { flex: 1; }
 .bc-name { font-weight: 700; font-size: 14px; }
-.bc-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
-.bc-breed { font-size: 11px; color: var(--purple); margin-top: 3px; }
-.bc-kids { display: flex; gap: 6px; }
+.bc-meta { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+.bc-breed   { font-size: 11px; color: var(--purple); margin-top: 4px; }
+.bc-parents { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.bc-kids-wrap { text-align: center; flex-shrink: 0; }
+.bc-total-kids { font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; color: var(--green); }
+.bc-kids-label { font-size: 10px; color: var(--muted); }
+.bc-kids { display: flex; gap: 6px; flex-wrap: wrap; }
 .kid-pill { padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; }
 .kid-pill.male   { background: var(--blue-pale);   color: var(--blue); }
 .kid-pill.female { background: var(--purple-pale);  color: var(--purple); }
 .kid-pill.total  { background: var(--bg2); color: var(--muted); }
+.bc-notes { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.bc-del {
+  margin-top: 12px; padding: 7px 12px; border-radius: 8px;
+  border: 1.5px solid var(--border); background: var(--bg2); color: var(--red);
+  font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.bc-del:active { background: var(--red); color: #fff; border-color: var(--red); }
 
+/* EGGS */
 .flock-egg-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .flock-egg-card { padding: 14px 16px; }
 .fec-top   { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -416,10 +731,15 @@ async function doBirth() {
 .fec-info  { flex: 1; }
 .fec-name  { font-weight: 700; font-size: 14px; }
 .fec-breed { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.fec-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.fec-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .fec-stat  { background: var(--bg2); border-radius: 8px; padding: 10px; text-align: center; }
 .fec-val   { font-size: 18px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .fec-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+.lay-rate-bar { display: flex; align-items: center; gap: 8px; }
+.lrb-track { flex: 1; background: var(--bg2); border-radius: 4px; height: 6px; overflow: hidden; }
+.lrb-fill  { height: 100%; background: #1d6fa5; border-radius: 4px; transition: width 0.5s ease; }
+.lrb-label { font-size: 10px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
 
 .log-eggs-btn {
   width: 100%; padding: 13px; border-radius: 12px; border: none;
@@ -449,23 +769,14 @@ async function doBirth() {
   width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
   background: transparent; font-size: 16px; color: var(--muted);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
 }
 .ei-del:active { background: var(--red-pale); color: var(--red); }
 
-.bc-del {
-  margin-top: 10px; padding: 7px 12px; border-radius: 8px;
-  border: 1.5px solid var(--border); background: var(--bg2); color: var(--red);
-  font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: all 0.15s;
-}
-.bc-del:active { background: var(--red); color: #fff; border-color: var(--red); }
-
+/* HATCH */
 .hatch-summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .hatch-sum-card { padding: 14px; text-align: center; }
 .hs-val   { font-size: 24px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
 .hs-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
-
 .hatch-list { display: flex; flex-direction: column; gap: 12px; }
 .hatch-card { padding: 16px; }
 .hc-top  { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
@@ -478,14 +789,10 @@ async function doBirth() {
 .hc-rate-wrap { text-align: center; flex-shrink: 0; min-width: 52px; }
 .hc-rate { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
 .hc-rate-label { font-size: 9px; color: var(--muted); margin-top: 2px; }
-.hc-stats {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 10px 0; border-top: 1px solid var(--bg2); border-bottom: 1px solid var(--bg2);
-}
+.hc-stats { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--bg2); border-bottom: 1px solid var(--bg2); }
 .hc-stat { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .hc-stat.success { color: var(--green); }
 .hc-stat.fail    { color: var(--red); }
-.hcs-icon  { font-size: 14px; }
 .hcs-arrow { color: var(--border); font-size: 12px; }
 .hc-notes { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .hc-del {
@@ -494,11 +801,13 @@ async function doBirth() {
   font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer;
 }
 
+/* OVERLAYS */
 .overlay {
   position: fixed; inset: 0; z-index: 400;
   background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
   display: flex; align-items: flex-end;
 }
+.confirm-overlay { align-items: center; justify-content: center; padding: 24px; }
 .modal-sheet {
   background: var(--surface); border-radius: 24px 24px 0 0;
   width: 100%; max-width: 430px; margin: 0 auto;
@@ -515,11 +824,20 @@ async function doBirth() {
   background: var(--purple-pale); border-radius: 10px; padding: 10px 12px;
   font-size: 12px; color: var(--purple); margin-bottom: 12px;
 }
+.add-batch-toggle {
+  background: var(--bg2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+}
+.toggle-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; cursor: pointer;
+}
+.toggle-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--green); }
 .total-kids-row {
   background: var(--green-pale); color: var(--green);
   border-radius: 10px; padding: 12px; text-align: center;
   font-size: 14px; font-weight: 700; margin-top: 4px; margin-bottom: 8px;
 }
+.optional { font-size: 11px; color: var(--muted); font-weight: 400; }
 .qty-row { display: flex; align-items: center; gap: 8px; }
 .qty-btn {
   width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
@@ -534,7 +852,33 @@ async function doBirth() {
   font-size: 15px; font-weight: 700; cursor: pointer;
 }
 .btn-full:disabled { opacity: 0.45; cursor: default; }
+
+.confirm-box { background: var(--surface); border-radius: 20px; padding: 24px 20px; width: 100%; max-width: 320px; }
+.confirm-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
+.confirm-title { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+.confirm-msg   { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px; line-height: 1.6; }
+.confirm-btns  { display: flex; gap: 10px; }
+.btn-cancel {
+  flex: 1; padding: 11px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.btn-save {
+  flex: 2; padding: 11px; border-radius: 10px; border: none;
+  background: var(--green); font-family: 'Outfit', sans-serif;
+  font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+}
+.btn-delete {
+  flex: 2; padding: 11px; border-radius: 10px; border: none;
+  background: var(--red); font-family: 'Outfit', sans-serif;
+  font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+}
+.edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+
 .modal-slide-enter-active, .modal-slide-leave-active { transition: all 0.25s ease; }
 .modal-slide-enter-from .modal-sheet, .modal-slide-leave-to .modal-sheet { transform: translateY(100%); }
 .modal-slide-enter-from, .modal-slide-leave-to { opacity: 0; }
+.confirm-enter-active, .confirm-leave-active { transition: all 0.2s ease; }
+.confirm-enter-from, .confirm-leave-to { opacity: 0; }
+.confirm-enter-from .confirm-box, .confirm-leave-to .confirm-box { transform: scale(0.92); }
 </style>

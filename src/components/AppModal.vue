@@ -1,30 +1,36 @@
 <template>
   <Transition name="modal">
-    <div class="modal-overlay" @click.self="ui.closeModal()">
+    <div class="modal-overlay" v-if="ui.activeModal" @click.self="ui.closeModal()">
       <div class="modal">
         <div class="modal-handle" />
 
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- ADD ANIMALS                                                -->
+        <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'addAnimal'">
-          <h2 class="modal-title">➕ Add Animals</h2>
+          <h2 class="modal-title">🐾 Add Animals</h2>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Type</label>
               <div class="seg-ctrl">
-                <button :class="['seg-btn', batchForm.type === 'Goat' ? 'active' : '']" @click="batchForm.type = 'Goat'; batchForm.breed = 'Native'">🐐 Goat</button>
-                <button :class="['seg-btn', batchForm.type === 'Duck' ? 'active' : '']" @click="batchForm.type = 'Duck'; batchForm.breed = 'Native'">🦆 Duck</button>
+                <button :class="['seg-btn', batchForm.type === 'Goat' ? 'active' : '']"
+                  @click="batchForm.type = 'Goat'; batchForm.breed = 'Native'">🐐 Goat</button>
+                <button :class="['seg-btn', batchForm.type === 'Duck' ? 'active' : '']"
+                  @click="batchForm.type = 'Duck'; batchForm.breed = 'Native'">🦆 Duck</button>
               </div>
             </div>
             <div class="form-group">
               <label class="form-label">Sex</label>
               <div class="seg-ctrl">
-                <button :class="['seg-btn', batchForm.sex === 'Female' ? 'active' : '']" @click="batchForm.sex = 'Female'">♀ Female</button>
-                <button :class="['seg-btn', batchForm.sex === 'Male' ? 'active' : '']" @click="batchForm.sex = 'Male'">♂ Male</button>
+                <button :class="['seg-btn', batchForm.sex === 'Female' ? 'active' : '']"
+                  @click="batchForm.sex = 'Female'">♀ Female</button>
+                <button :class="['seg-btn', batchForm.sex === 'Male' ? 'active' : '']"
+                  @click="batchForm.sex = 'Male'">♂ Male</button>
               </div>
             </div>
           </div>
 
-          <!-- BREED -->
           <div class="form-group">
             <label class="form-label">Breed</label>
             <div class="breed-chips">
@@ -51,11 +57,35 @@
             </div>
           </div>
 
+          <!-- PRICE — REQUIRED -->
           <div class="form-group">
-            <label class="form-label">Price per head (₱) <span class="optional">(optional)</span></label>
-            <input class="form-input" type="number" v-model.number="batchForm.pricePerHead" placeholder="e.g. 350" />
-            <div class="qty-hint" v-if="batchForm.pricePerHead && batchForm.count > 1">
-              Total: <strong>₱{{ formatNum(batchForm.pricePerHead * batchForm.count) }}</strong>
+            <label class="form-label">
+              Price per head (₱)
+              <span class="required-badge">Required</span>
+            </label>
+            <div :class="['price-wrap', batchPriceError ? 'error' : '', batchForm.pricePerHead !== null && batchForm.pricePerHead !== '' ? 'filled' : '']">
+              <span class="price-peso">₱</span>
+              <input
+                ref="batchPriceRef"
+                class="price-input"
+                type="number"
+                v-model.number="batchForm.pricePerHead"
+                placeholder="0"
+                min="0"
+                @input="batchPriceError = false"
+              />
+            </div>
+            <Transition name="err-pop">
+              <div class="field-error" v-if="batchPriceError">
+                ⚠️ Enter the price per head. Use ₱0 if free or gifted.
+              </div>
+            </Transition>
+            <div class="cost-preview" v-if="batchForm.pricePerHead > 0">
+              <span>Total for {{ batchForm.count }} {{ batchForm.type }}{{ batchForm.count > 1 ? 's' : '' }}</span>
+              <strong>₱{{ formatNum(batchForm.pricePerHead * batchForm.count) }}</strong>
+            </div>
+            <div class="zero-hint" v-else-if="batchForm.pricePerHead === null || batchForm.pricePerHead === ''">
+              💡 Enter ₱0 for free or gifted animals
             </div>
           </div>
 
@@ -63,7 +93,9 @@
             <div class="form-group">
               <label class="form-label">Health</label>
               <select class="form-select" v-model="batchForm.health">
-                <option>Healthy</option><option>Sick</option><option>Under Treatment</option>
+                <option>Healthy</option>
+                <option>Sick</option>
+                <option>Under Treatment</option>
               </select>
             </div>
             <div class="form-group">
@@ -82,35 +114,61 @@
           </button>
         </template>
 
+        <!-- ══════════════════════════════════════════════════════════ -->
+        <!-- RECORD TRANSACTION                                         -->
+        <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'addExpense'">
           <h2 class="modal-title">💸 Record Transaction</h2>
+
           <div class="form-group">
             <label class="form-label">Type</label>
             <div class="seg-ctrl">
-              <button :class="['seg-btn', expenseForm.type === 'Expense' ? 'active danger' : '']" @click="expenseForm.type = 'Expense'">📤 Expense</button>
-              <button :class="['seg-btn', expenseForm.type === 'Income' ? 'active success' : '']" @click="expenseForm.type = 'Income'">📥 Income</button>
+              <button :class="['seg-btn', expenseForm.type === 'Expense' ? 'active danger' : '']"
+                @click="expenseForm.type = 'Expense'; expenseForm.category = 'Feeds'">
+                📤 Expense
+              </button>
+              <button :class="['seg-btn', expenseForm.type === 'Income' ? 'active success' : '']"
+                @click="expenseForm.type = 'Income'; expenseForm.category = 'Animal Sale'">
+                📥 Income
+              </button>
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Category</label>
-            <select class="form-select" v-model="expenseForm.category">
-              <option v-for="c in expenseCategories" :key="c">{{ c }}</option>
-            </select>
+            <div class="cat-chips">
+              <button
+                v-for="c in activeTxCategories" :key="c.label"
+                :class="['cat-chip', expenseForm.category === c.label ? 'active' : '', expenseForm.type.toLowerCase()]"
+                @click="expenseForm.category = c.label">
+                {{ c.icon }} {{ c.label }}
+              </button>
+            </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Amount (₱)</label>
-            <input class="form-input amount-input" type="number" v-model="expenseForm.amount" placeholder="0.00" />
+            <input class="form-input amount-input" type="number"
+              v-model.number="expenseForm.amount" placeholder="0.00"
+              @input="expenseAmountError = false" />
+            <Transition name="err-pop">
+              <div class="field-error" v-if="expenseAmountError">⚠️ Enter an amount.</div>
+            </Transition>
           </div>
+
           <div class="form-group">
             <label class="form-label">Description <span class="optional">(optional)</span></label>
-            <input class="form-input" v-model="expenseForm.description" placeholder="e.g. 50kg duck feeds" />
+            <input class="form-input" v-model="expenseForm.description"
+              :placeholder="expenseForm.type === 'Expense' ? 'e.g. 50kg duck feeds from AgriMart' : 'e.g. Sold 5 goats to Reyes'" />
           </div>
+
           <div class="form-group">
             <label class="form-label">Date</label>
             <input class="form-input" type="date" v-model="expenseForm.date" />
           </div>
+
           <button class="btn-full" :class="expenseForm.type === 'Expense' ? 'danger' : ''" @click="submitExpense">
-            Save {{ expenseForm.type }}
+            {{ expenseForm.type === 'Expense' ? '📤' : '📥' }} Save {{ expenseForm.type }}
           </button>
         </template>
 
@@ -119,6 +177,7 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'markPregnant'">
           <h2 class="modal-title">🐣 Track Goat Pregnancy</h2>
+
           <div class="form-group">
             <label class="form-label">Doe (Mother) Name / Tag</label>
             <input class="form-input" v-model="pregnancyForm.goatName" placeholder="Enter name or tag ID" />
@@ -159,6 +218,7 @@
             <label class="form-label">Date Mated</label>
             <input class="form-input" type="date" v-model="pregnancyForm.mateDate" />
           </div>
+
           <div class="form-group">
             <label class="form-label">Expected Kids</label>
             <div class="qty-row">
@@ -167,11 +227,21 @@
               <button class="qty-btn" @click="pregnancyForm.expectedKids = Math.min(5, pregnancyForm.expectedKids + 1)">+</button>
             </div>
           </div>
+
+          <div class="form-group">
+            <label class="form-label">Notes <span class="optional">(optional)</span></label>
+            <input class="form-input" v-model="pregnancyForm.notes"
+              placeholder="e.g. mated with Buck #3, first pregnancy" />
+          </div>
+
           <div class="hint-box">
             📅 Expected birth: <strong>{{ breedingStore.expectedBirthFromDate(pregnancyForm.mateDate) }}</strong><br>
             <span>Based on 150-day gestation</span>
           </div>
-          <button class="btn-full" @click="submitPregnancy">Confirm Pregnancy</button>
+
+          <button class="btn-full" @click="submitPregnancy" :disabled="!pregnancyForm.goatName.trim()">
+            Confirm Pregnancy
+          </button>
         </template>
 
         <!-- ══════════════════════════════════════════════════════════ -->
@@ -179,23 +249,41 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'recordDeath'">
           <h2 class="modal-title">💀 Record Deaths</h2>
+
           <div class="form-group">
             <label class="form-label">Select Batch</label>
             <select class="form-select" v-model="quickDeathForm.batchId">
               <option value="" disabled>— Choose a batch —</option>
-              <option v-for="b in animalStore.batches" :key="b.id" :value="b.id">
+              <option v-for="b in animalStore.batches.filter(b => b.currentCount > 0)" :key="b.id" :value="b.id">
                 {{ b.label || b.type + ' Batch' }} ({{ b.currentCount }} alive)
               </option>
             </select>
           </div>
-          <div class="form-group" v-if="quickDeathForm.batchId">
-            <label class="form-label">How many died?</label>
-            <div class="qty-row">
-              <button class="qty-btn" @click="quickDeathForm.quantity = Math.max(1, quickDeathForm.quantity - 1)">−</button>
-              <input class="form-input qty-input" type="number" v-model.number="quickDeathForm.quantity" min="1" />
-              <button class="qty-btn" @click="quickDeathForm.quantity++">+</button>
+
+          <template v-if="quickDeathForm.batchId">
+            <div class="form-group">
+              <label class="form-label">How many died?</label>
+              <div class="qty-row">
+                <button class="qty-btn"
+                  @click="quickDeathForm.quantity = Math.max(1, quickDeathForm.quantity - 1)">−</button>
+                <input class="form-input qty-input" type="number" v-model.number="quickDeathForm.quantity"
+                  min="1" :max="selectedDeathBatch?.currentCount" />
+                <button class="qty-btn"
+                  @click="quickDeathForm.quantity = Math.min(selectedDeathBatch?.currentCount || 99, quickDeathForm.quantity + 1)">+</button>
+              </div>
+              <div class="qty-hint" v-if="selectedDeathBatch">
+                {{ selectedDeathBatch.currentCount - quickDeathForm.quantity }} will remain alive
+              </div>
             </div>
-          </div>
+
+            <div class="loss-preview" v-if="selectedDeathBatch?.pricePerHead">
+              <span>💀 Investment loss</span>
+              <strong class="loss-val">
+                ₱{{ formatNum(selectedDeathBatch.pricePerHead * quickDeathForm.quantity) }}
+              </strong>
+            </div>
+          </template>
+
           <div class="form-group">
             <label class="form-label">Cause of Death</label>
             <div class="cause-grid">
@@ -206,11 +294,15 @@
               </button>
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Date</label>
             <input class="form-input" type="date" v-model="quickDeathForm.date" />
           </div>
-          <button class="btn-full danger" @click="submitQuickDeath" :disabled="!quickDeathForm.batchId">Record Death</button>
+
+          <button class="btn-full danger" @click="submitQuickDeath" :disabled="!quickDeathForm.batchId">
+            Record {{ quickDeathForm.quantity }} Death{{ quickDeathForm.quantity > 1 ? 's' : '' }}
+          </button>
         </template>
 
         <!-- ══════════════════════════════════════════════════════════ -->
@@ -218,6 +310,7 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'logEggs'">
           <h2 class="modal-title">🥚 Log Egg Collection</h2>
+
           <div class="form-group">
             <label class="form-label">Duck Flock</label>
             <select class="form-select" v-model="eggForm.batchId">
@@ -227,6 +320,7 @@
               </option>
             </select>
           </div>
+
           <div class="form-group">
             <label class="form-label">Eggs Collected Today</label>
             <div class="qty-row">
@@ -235,18 +329,24 @@
               <button class="qty-btn" @click="eggForm.eggsCollected++">+</button>
             </div>
             <div class="qty-hint" v-if="selectedDuckBatch && eggForm.eggsCollected > 0">
-              Lay rate: <strong :style="{ color: layRate >= 70 ? 'var(--green)' : layRate >= 40 ? 'var(--amber)' : 'var(--red)' }">{{ layRate }}%</strong>
+              Lay rate:
+              <strong :style="{ color: layRate >= 70 ? 'var(--green)' : layRate >= 40 ? 'var(--amber)' : 'var(--red)' }">
+                {{ layRate }}%
+              </strong>
               ({{ eggForm.eggsCollected }} / {{ selectedDuckBatch.currentCount }} ducks)
             </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Date</label>
             <input class="form-input" type="date" v-model="eggForm.date" />
           </div>
+
           <div class="form-group">
             <label class="form-label">Notes <span class="optional">(optional)</span></label>
             <input class="form-input" v-model="eggForm.notes" placeholder="e.g. some soft-shelled, rainy day" />
           </div>
+
           <button class="btn-full" @click="submitEggs" :disabled="!eggForm.batchId">Save Collection</button>
         </template>
 
@@ -255,6 +355,7 @@
         <!-- ══════════════════════════════════════════════════════════ -->
         <template v-if="ui.activeModal === 'logHatch'">
           <h2 class="modal-title">🐥 Record Hatch</h2>
+
           <div class="form-group">
             <label class="form-label">Duck Flock</label>
             <select class="form-select" v-model="hatchForm.batchId">
@@ -289,11 +390,12 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Eggs Set</label>
-              <input class="form-input" type="number" v-model.number="hatchForm.eggsSet" min="0" />
+              <input class="form-input qty-input" type="number" v-model.number="hatchForm.eggsSet" min="0" />
             </div>
             <div class="form-group">
               <label class="form-label">Hatched</label>
-              <input class="form-input" type="number" v-model.number="hatchForm.hatched" min="0" />
+              <input class="form-input qty-input" type="number" v-model.number="hatchForm.hatched"
+                min="0" :max="hatchForm.eggsSet" />
             </div>
           </div>
 
@@ -309,11 +411,15 @@
             <label class="form-label">Hatch Date</label>
             <input class="form-input" type="date" v-model="hatchForm.hatchDate" />
           </div>
+
           <div class="form-group">
             <label class="form-label">Notes <span class="optional">(optional)</span></label>
             <input class="form-input" v-model="hatchForm.notes" placeholder="e.g. incubated naturally, 28 days" />
           </div>
-          <button class="btn-full" @click="submitHatch" :disabled="!hatchForm.batchId">Save Hatch Record</button>
+
+          <button class="btn-full" @click="submitHatch" :disabled="!hatchForm.batchId || !hatchForm.eggsSet">
+            Save Hatch Record
+          </button>
         </template>
 
         <!-- ══════════════════════════════════════════════════════════ -->
@@ -335,7 +441,8 @@
 
           <div class="form-group">
             <label class="form-label">Animal / Batch Name</label>
-            <input class="form-input" v-model="healthForm.animal" placeholder="e.g. Flock A, Bella, all goats" />
+            <input class="form-input" v-model="healthForm.animal"
+              placeholder="e.g. Flock A, Bella, all goats" />
             <div class="quick-pick" v-if="relevantBatches.length">
               <div class="qp-label">Quick pick:</div>
               <div class="qp-chips">
@@ -361,12 +468,14 @@
 
           <div class="form-group" v-if="healthForm.treatmentType === 'Custom'">
             <label class="form-label">Custom Treatment Name</label>
-            <input class="form-input" v-model="healthForm.customTreatment" placeholder="e.g. Hoof Trimming, Eye Drop" />
+            <input class="form-input" v-model="healthForm.customTreatment"
+              placeholder="e.g. Hoof Trimming, Eye Drop" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Medicine / Product <span class="optional">(optional)</span></label>
-            <input class="form-input" v-model="healthForm.medicine" placeholder="e.g. Ivermectin 1%, Vitamin B" />
+            <input class="form-input" v-model="healthForm.medicine"
+              placeholder="e.g. Ivermectin 1%, Vitamin B" />
           </div>
 
           <div class="form-group">
@@ -392,17 +501,22 @@
             </div>
             <div v-if="healthForm.customRepeat" class="custom-repeat-row">
               <span class="form-label" style="white-space:nowrap;">Every</span>
-              <input class="form-input" type="number" v-model.number="healthForm.repeatEveryDays" min="1" style="width:80px;" />
+              <input class="form-input" type="number" v-model.number="healthForm.repeatEveryDays"
+                min="1" style="width:80px;" />
               <span class="form-label">days</span>
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label">Notes <span class="optional">(optional)</span></label>
-            <input class="form-input" v-model="healthForm.notes" placeholder="Dosage, special instructions..." />
+            <input class="form-input" v-model="healthForm.notes"
+              placeholder="Dosage, special instructions..." />
           </div>
 
-          <button class="btn-full" @click="submitHealth">Set Reminder</button>
+          <button class="btn-full" @click="submitHealth"
+            :disabled="!healthForm.animal.trim() || !healthForm.nextDueDate">
+            📅 Set Reminder
+          </button>
         </template>
 
         <!-- ══════════════════════════════════════════════════════════ -->
@@ -411,7 +525,6 @@
         <template v-if="ui.activeModal === 'sellAnimal'">
           <h2 class="modal-title">💰 Sell Animals</h2>
 
-          <!-- PICK BATCH -->
           <div class="form-group">
             <label class="form-label">Which batch?</label>
             <div class="sell-batch-list">
@@ -419,38 +532,38 @@
                 v-for="b in animalStore.batches.filter(b => b.currentCount > 0)"
                 :key="b.id"
                 :class="['sell-batch-btn', sellForm.batchId === b.id ? 'active' : '']"
-                @click="pickBatch(b)"
-              >
+                @click="pickBatch(b)">
                 <span class="sbb-emoji">{{ animalStore.animalEmoji(b.type) }}</span>
                 <span class="sbb-info">
                   <span class="sbb-label">{{ b.label || b.type }}</span>
-                  <span class="sbb-meta">{{ b.breed || '' }} · {{ b.currentCount }} left · bought ₱{{ b.pricePerHead }}/head</span>
+                  <span class="sbb-meta">
+                    {{ b.breed || '' }} · {{ b.currentCount }} left
+                    <template v-if="b.pricePerHead"> · cost ₱{{ formatNum(b.pricePerHead) }}/head</template>
+                  </span>
                 </span>
               </button>
             </div>
           </div>
 
           <template v-if="selectedBatch">
-            <!-- QUANTITY -->
             <div class="form-group">
               <label class="form-label">How many to sell?</label>
               <div class="qty-row">
                 <button class="qty-btn" @click="sellForm.quantity = Math.max(1, sellForm.quantity - 1)">−</button>
                 <input class="form-input qty-input" type="number" v-model.number="sellForm.quantity"
                   :max="selectedBatch.currentCount" min="1" />
-                <button class="qty-btn" @click="sellForm.quantity = Math.min(selectedBatch.currentCount, sellForm.quantity + 1)">+</button>
+                <button class="qty-btn"
+                  @click="sellForm.quantity = Math.min(selectedBatch.currentCount, sellForm.quantity + 1)">+</button>
               </div>
-              <div class="qty-hint">{{ selectedBatch.currentCount }} available</div>
+              <div class="qty-hint">{{ selectedBatch.currentCount - sellForm.quantity }} will remain after sale</div>
             </div>
 
-            <!-- SELL PRICE -->
             <div class="form-group">
               <label class="form-label">Selling price per head (₱)</label>
               <input class="form-input amount-input" type="number"
                 v-model.number="sellForm.pricePerHead" placeholder="0" />
             </div>
 
-            <!-- PROFIT PREVIEW — the key thing -->
             <div :class="['profit-preview', profitPerHead >= 0 ? 'gain' : 'loss']" v-if="sellForm.pricePerHead">
               <div class="pp-row">
                 <span>Sell price</span>
@@ -488,10 +601,9 @@
 
             <button class="btn-full" @click="submitSell"
               :disabled="!sellForm.pricePerHead || !sellForm.quantity">
-              Confirm Sale · ₱{{ formatNum(sellForm.pricePerHead * sellForm.quantity) }} total
+              Confirm Sale · ₱{{ formatNum((sellForm.pricePerHead || 0) * sellForm.quantity) }} total
             </button>
           </template>
-
         </template>
 
       </div>
@@ -500,7 +612,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, nextTick } from 'vue'
 import { useUIStore }       from '@/stores/ui'
 import { useAnimalStore, GOAT_BREEDS, DUCK_BREEDS, computeOffspringBreed } from '@/stores/animals'
 import { useFinanceStore }  from '@/stores/finance'
@@ -515,10 +627,26 @@ const healthStore   = useHealthStore()
 
 const today = new Date().toISOString().slice(0, 10)
 
-const expenseCategories = [
-  'Feeds','Medicine','Veterinary','Labor','Equipment',
-  'Animal Sale','Egg Sale','Milk Sale','Manure Sale','Other',
-]
+// ── HELPERS ────────────────────────────────────────────────────────────────────
+function formatNum(n) {
+  return Number(n || 0).toLocaleString('en-PH')
+}
+
+function breedIcon(b) {
+  return { 'Anglo-Nubian': '🐐', Native: '🌿', Indo: '🦆' }[b] ?? '🔀'
+}
+
+const allGoatBreeds = computed(() => {
+  const base = [...GOAT_BREEDS]
+  animalStore.goatBatches.forEach(b => {
+    if (b.breed && !base.includes(b.breed)) base.push(b.breed)
+  })
+  return base
+})
+
+const currentBreeds = computed(() =>
+  batchForm.type === 'Goat' ? GOAT_BREEDS : DUCK_BREEDS
+)
 
 const deathCauses = [
   { icon: '🦠', label: 'Disease' },
@@ -538,59 +666,89 @@ const treatmentTypes = [
   { icon: '✏️', label: 'Custom' },
 ]
 
-const allGoatBreeds = computed(() => {
-  const base = [...GOAT_BREEDS]
-  animalStore.goatBatches.forEach(b => {
-    if (b.breed && !base.includes(b.breed)) base.push(b.breed)
-  })
-  return base
-})
+const expenseCategories = [
+  { icon: '🌾', label: 'Feeds' },
+  { icon: '💊', label: 'Medicine' },
+  { icon: '🩺', label: 'Veterinary' },
+  { icon: '👷', label: 'Labor' },
+  { icon: '🔧', label: 'Equipment' },
+  { icon: '💡', label: 'Utilities' },
+  { icon: '🚗', label: 'Transport' },
+  { icon: '📋', label: 'Other' },
+]
 
-const currentBreeds = computed(() =>
-  batchForm.type === 'Goat' ? GOAT_BREEDS : DUCK_BREEDS
+const incomeCategories = [
+  { icon: '💰', label: 'Animal Sale' },
+  { icon: '🥚', label: 'Egg Sale' },
+  { icon: '🥛', label: 'Milk Sale' },
+  { icon: '🌿', label: 'Manure Sale' },
+  { icon: '📋', label: 'Other' },
+]
+
+const activeTxCategories = computed(() =>
+  expenseForm.type === 'Expense' ? expenseCategories : incomeCategories
 )
 
-function breedIcon(b) {
-  return { 'Anglo-Nubian': '🐐', Native: '🌿', Indo: '🦆' }[b] ?? '🔀'
-}
+// ── ADD BATCH ──────────────────────────────────────────────────────────────────
+const saving          = ref(false)
+const batchPriceError = ref(false)
+const batchPriceRef   = ref(null)
 
-function formatNum(n) {
-  return Number(n || 0).toLocaleString('en-PH')
-}
-
-// ── BATCH ──────────────────────────────────────────────────────────────────────
-const saving = ref(false)
 const batchForm = reactive({
   type: 'Duck', breed: 'Native', sex: 'Female',
-  label: '', count: 1, pricePerHead: '',
+  label: '', count: 1, pricePerHead: null,
   health: 'Healthy', addedDate: today, notes: '',
 })
 
 async function submitBatch() {
+  // Price is required; null = untouched, 0 = valid (free animal)
+  if (batchForm.pricePerHead === null || batchForm.pricePerHead === '' || batchForm.pricePerHead < 0) {
+    batchPriceError.value = true
+    await nextTick()
+    batchPriceRef.value?.focus()
+    batchPriceRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
   if (saving.value) return
   saving.value = true
-  const count = batchForm.count; const type = batchForm.type
+  const { count, type } = batchForm
   try {
     await animalStore.addBatch({ ...batchForm })
-    Object.assign(batchForm, { type: 'Duck', breed: 'Native', sex: 'Female', label: '', count: 1, pricePerHead: '', health: 'Healthy', addedDate: today, notes: '' })
+    Object.assign(batchForm, {
+      type: 'Duck', breed: 'Native', sex: 'Female', label: '',
+      count: 1, pricePerHead: null, health: 'Healthy', addedDate: today, notes: '',
+    })
+    batchPriceError.value = false
     ui.closeModal()
     ui.showToast(`✅ ${count > 1 ? count + ' ' + type + 's' : type} added!`)
-  } finally { saving.value = false }
+  } finally {
+    saving.value = false
+  }
 }
 
-// ── EXPENSE ────────────────────────────────────────────────────────────────────
-const expenseForm = reactive({ type: 'Expense', category: 'Feeds', amount: '', description: '', date: today })
+// ── TRANSACTION ────────────────────────────────────────────────────────────────
+const expenseAmountError = ref(false)
+const expenseForm = reactive({
+  type: 'Expense', category: 'Feeds', amount: '', description: '', date: today,
+})
 
 function submitExpense() {
-  if (!expenseForm.amount) { ui.showToast('⚠️ Enter an amount'); return }
-  finance.addTransaction({ ...expenseForm })
+  if (!expenseForm.amount || Number(expenseForm.amount) <= 0) {
+    expenseAmountError.value = true
+    return
+  }
+  finance.addTransaction({ ...expenseForm, amount: Number(expenseForm.amount) })
   Object.assign(expenseForm, { type: 'Expense', category: 'Feeds', amount: '', description: '', date: today })
+  expenseAmountError.value = false
   ui.closeModal()
   ui.showToast('✅ Transaction saved!')
 }
 
 // ── PREGNANCY ──────────────────────────────────────────────────────────────────
-const pregnancyForm = reactive({ goatName: '', mateDate: today, expectedKids: 1, motherBreed: '', fatherBreed: '' })
+const pregnancyForm = reactive({
+  goatName: '', mateDate: today, expectedKids: 1,
+  motherBreed: '', fatherBreed: '', notes: '',
+})
 const femaleFlagged = computed(() => animalStore.flagged.filter(f => f.sex === 'Female'))
 const offspringPreview = computed(() =>
   pregnancyForm.motherBreed && pregnancyForm.fatherBreed
@@ -598,15 +756,21 @@ const offspringPreview = computed(() =>
 )
 
 function submitPregnancy() {
-  if (!pregnancyForm.goatName) { ui.showToast('⚠️ Enter a goat name'); return }
+  if (!pregnancyForm.goatName.trim()) { ui.showToast('⚠️ Enter a goat name'); return }
   breedingStore.addPregnancy({ ...pregnancyForm, offspringBreed: offspringPreview.value })
-  Object.assign(pregnancyForm, { goatName: '', mateDate: today, expectedKids: 1, motherBreed: '', fatherBreed: '' })
+  Object.assign(pregnancyForm, {
+    goatName: '', mateDate: today, expectedKids: 1,
+    motherBreed: '', fatherBreed: '', notes: '',
+  })
   ui.closeModal()
   ui.showToast('✅ Pregnancy tracked!')
 }
 
 // ── DEATH ──────────────────────────────────────────────────────────────────────
 const quickDeathForm = reactive({ batchId: '', quantity: 1, cause: 'Disease', date: today })
+const selectedDeathBatch = computed(() =>
+  animalStore.batches.find(b => b.id === quickDeathForm.batchId) || null
+)
 
 async function submitQuickDeath() {
   if (!quickDeathForm.batchId) return
@@ -618,7 +782,9 @@ async function submitQuickDeath() {
 
 // ── EGGS ───────────────────────────────────────────────────────────────────────
 const eggForm = reactive({ batchId: '', eggsCollected: 0, date: today, notes: '' })
-const selectedDuckBatch = computed(() => animalStore.duckBatches.find(b => b.id === eggForm.batchId))
+const selectedDuckBatch = computed(() =>
+  animalStore.duckBatches.find(b => b.id === eggForm.batchId)
+)
 const layRate = computed(() => {
   if (!selectedDuckBatch.value?.currentCount) return 0
   return Math.min(100, Math.round((eggForm.eggsCollected / selectedDuckBatch.value.currentCount) * 100))
@@ -633,7 +799,10 @@ async function submitEggs() {
 }
 
 // ── HATCH ──────────────────────────────────────────────────────────────────────
-const hatchForm = reactive({ batchId: '', motherBreed: '', fatherBreed: '', eggsSet: 0, hatched: 0, hatchDate: today, notes: '' })
+const hatchForm = reactive({
+  batchId: '', motherBreed: '', fatherBreed: '',
+  eggsSet: 0, hatched: 0, hatchDate: today, notes: '',
+})
 const duckOffspringPreview = computed(() =>
   hatchForm.motherBreed && hatchForm.fatherBreed
     ? computeOffspringBreed(hatchForm.motherBreed, hatchForm.fatherBreed) : ''
@@ -645,12 +814,15 @@ const hatchRate = computed(() =>
 async function submitHatch() {
   if (!hatchForm.batchId) return
   await animalStore.addHatchRecord({ ...hatchForm })
-  Object.assign(hatchForm, { batchId: '', motherBreed: '', fatherBreed: '', eggsSet: 0, hatched: 0, hatchDate: today, notes: '' })
+  Object.assign(hatchForm, {
+    batchId: '', motherBreed: '', fatherBreed: '',
+    eggsSet: 0, hatched: 0, hatchDate: today, notes: '',
+  })
   ui.closeModal()
   ui.showToast('🐥 Hatch record saved!')
 }
 
-// ── HEALTH REMINDER ────────────────────────────────────────────────────────────
+// ── HEALTH ─────────────────────────────────────────────────────────────────────
 const healthForm = reactive({
   animal: '', animalType: 'Goat',
   treatmentType: 'Vaccination', customTreatment: '',
@@ -668,19 +840,22 @@ function submitHealth() {
   if (!healthForm.animal.trim()) { ui.showToast('⚠️ Enter animal or batch name'); return }
   if (!healthForm.nextDueDate)   { ui.showToast('⚠️ Set a due date');             return }
   healthStore.addReminder({ ...healthForm })
-  Object.assign(healthForm, { animal: '', animalType: 'Goat', treatmentType: 'Vaccination', customTreatment: '', medicine: '', notes: '', nextDueDate: today, repeatEveryDays: 90, customRepeat: false })
+  Object.assign(healthForm, {
+    animal: '', animalType: 'Goat', treatmentType: 'Vaccination',
+    customTreatment: '', medicine: '', notes: '',
+    nextDueDate: today, repeatEveryDays: 90, customRepeat: false,
+  })
   ui.closeModal()
   ui.showToast('📅 Reminder set!')
 }
 
-// ── SELL FORM ──────────────────────────────────────────────────────────────
+// ── SELL ───────────────────────────────────────────────────────────────────────
 const sellForm = reactive({
   batchId: '', quantity: 1, pricePerHead: '', soldTo: '', soldDate: today,
 })
 const selectedBatch = computed(() =>
   animalStore.batches.find(b => b.id === sellForm.batchId) || null
 )
-// Profit = sell price per head − buy price per head
 const profitPerHead = computed(() =>
   selectedBatch.value
     ? (Number(sellForm.pricePerHead) || 0) - (Number(selectedBatch.value.pricePerHead) || 0)
@@ -704,41 +879,159 @@ async function submitSell() {
   ui.closeModal()
   ui.showToast(msg)
 }
-
 </script>
 
 <style scoped>
+/* ── OVERLAY / SHEET ──────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  z-index: 300; display: flex; align-items: flex-end; backdrop-filter: blur(4px);
+  z-index: 300; display: flex; align-items: flex-end;
+  backdrop-filter: blur(4px);
 }
 .modal {
   background: var(--surface); border-radius: 24px 24px 0 0;
   width: 100%; max-width: 430px; margin: 0 auto;
   padding: 16px 20px 40px; max-height: 92vh; overflow-y: auto;
 }
-.modal-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 20px; }
+.modal-handle {
+  width: 40px; height: 4px; border-radius: 2px;
+  background: var(--border); margin: 0 auto 20px;
+}
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
-.optional { font-size: 11px; color: var(--muted); font-weight: 400; }
 
-.seg-ctrl { display: flex; background: var(--bg2); border-radius: 10px; padding: 3px; gap: 2px; }
+/* ── FORM BASICS ──────────────────────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+.form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-label {
+  display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 7px;
+}
+.optional { font-size: 11px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.form-input, .form-select {
+  width: 100%; padding: 11px 14px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  font-family: 'Outfit', sans-serif; font-size: 14px; color: var(--text);
+  outline: none; transition: border-color 0.15s; box-sizing: border-box;
+}
+.form-input:focus, .form-select:focus { border-color: var(--green); }
+
+.amount-input {
+  font-size: 22px !important; font-weight: 700 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ── SEGMENTED CONTROL ───────────────────────────────────────────────────── */
+.seg-ctrl {
+  display: flex; background: var(--bg2); border-radius: 10px; padding: 3px; gap: 2px;
+}
 .seg-btn {
   flex: 1; padding: 9px; border-radius: 8px; border: none;
   font-size: 12px; font-weight: 600; color: var(--muted);
   font-family: 'Outfit', sans-serif; cursor: pointer; transition: all 0.15s; background: none;
 }
-.seg-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.seg-btn.active         { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .seg-btn.active.danger  { color: var(--red); }
 .seg-btn.active.success { color: var(--green); }
 
+/* ── BREED CHIPS ─────────────────────────────────────────────────────────── */
 .breed-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .breed-chip {
   padding: 8px 14px; border-radius: 20px; border: 1.5px solid var(--border);
   background: var(--bg2); color: var(--muted);
-  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+  font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
 }
 .breed-chip.active { background: var(--green); border-color: var(--green); color: #fff; }
 
+/* ── CATEGORY CHIPS ──────────────────────────────────────────────────────── */
+.cat-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-chip {
+  padding: 7px 12px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--bg2); color: var(--muted);
+  font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.cat-chip.active.expense { background: var(--red-pale);   border-color: var(--red);   color: var(--red); }
+.cat-chip.active.income  { background: var(--green-pale); border-color: var(--green); color: var(--green); }
+
+/* ── PRICE INPUT (required) ──────────────────────────────────────────────── */
+.required-badge {
+  display: inline-block;
+  background: var(--red-pale); color: var(--red);
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  margin-left: 6px; vertical-align: middle;
+  text-transform: none; letter-spacing: 0;
+}
+.price-wrap {
+  display: flex; align-items: center;
+  background: var(--bg2); border: 2px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.price-wrap:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(45,106,79,0.12); }
+.price-wrap.filled        { border-color: var(--green); }
+.price-wrap.error         {
+  border-color: var(--red); box-shadow: 0 0 0 3px rgba(193,18,31,0.12);
+  animation: shake 0.3s ease;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-5px); }
+  40%     { transform: translateX(5px); }
+  60%     { transform: translateX(-3px); }
+  80%     { transform: translateX(3px); }
+}
+.price-peso {
+  padding: 0 4px 0 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; font-weight: 700; color: var(--green); flex-shrink: 0;
+}
+.price-input {
+  flex: 1; border: none; background: transparent;
+  padding: 13px 14px 13px 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px; font-weight: 700; color: var(--text); outline: none;
+}
+.price-input::placeholder { color: var(--muted); font-size: 16px; font-weight: 400; }
+.price-input::-webkit-outer-spin-button,
+.price-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.price-input[type=number] { -moz-appearance: textfield; }
+
+.field-error {
+  font-size: 12px; color: var(--red);
+  background: var(--red-pale); border-radius: 8px;
+  padding: 8px 12px; margin-top: 6px;
+}
+.cost-preview {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--green-pale); border-radius: 8px;
+  padding: 8px 12px; margin-top: 8px;
+  font-size: 12px; color: var(--green);
+}
+.cost-preview strong {
+  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700;
+}
+.zero-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* ── QTY ROW ──────────────────────────────────────────────────────────────── */
+.qty-row { display: flex; align-items: center; gap: 10px; }
+.qty-btn {
+  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+  border: 1.5px solid var(--border); background: var(--bg2);
+  font-size: 22px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background 0.12s;
+}
+.qty-btn:active { background: var(--border); transform: scale(0.92); }
+.qty-input { text-align: center; font-size: 18px !important; font-weight: 700 !important; }
+.qty-hint {
+  margin-top: 8px; font-size: 12px; color: var(--muted);
+  background: var(--bg2); border-radius: 8px; padding: 8px 10px;
+}
+.qty-hint strong { color: var(--text); }
+
+/* ── HINT BOX ─────────────────────────────────────────────────────────────── */
 .hint-box {
   background: var(--green-pale); border-radius: 10px;
   padding: 12px; margin-bottom: 16px;
@@ -747,32 +1040,38 @@ async function submitSell() {
 .hint-box span { color: var(--muted); font-size: 12px; }
 .hint-box.breed-preview { background: var(--purple-pale); color: var(--purple); }
 
+/* ── CAUSE / TREATMENT GRIDS ─────────────────────────────────────────────── */
 .cause-grid, .treatment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cause-btn, .treatment-btn {
   padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--border);
   background: var(--bg2); color: var(--muted); text-align: left;
-  font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+  font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
 }
 .cause-btn.active     { border-color: var(--red);   background: var(--red-pale);   color: var(--red); }
 .treatment-btn.active { border-color: var(--green); background: var(--green-pale); color: var(--green); }
 
+/* ── REPEAT CHIPS ─────────────────────────────────────────────────────────── */
 .repeat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .repeat-chip {
   padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--border);
   background: var(--bg2); color: var(--muted);
-  font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+  font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
 }
 .repeat-chip.active { background: var(--green); border-color: var(--green); color: #fff; }
 .custom-repeat-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 
+/* ── HATCH RATE ───────────────────────────────────────────────────────────── */
 .hatch-rate-row {
   font-size: 13px; color: var(--muted);
   background: var(--bg2); border-radius: 8px; padding: 10px 12px; margin-bottom: 4px;
 }
 
+/* ── QUICK PICK ───────────────────────────────────────────────────────────── */
 .quick-pick { margin-top: 8px; }
-.qp-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-.qp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.qp-label   { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.qp-chips   { display: flex; flex-wrap: wrap; gap: 6px; }
 .qp-chip {
   padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
   border: 1.5px solid var(--border); background: var(--bg2); color: var(--muted);
@@ -780,31 +1079,18 @@ async function submitSell() {
 }
 .qp-chip.active { background: var(--green); border-color: var(--green); color: #fff; }
 
-.qty-row { display: flex; align-items: center; gap: 10px; }
-.qty-btn {
-  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
-  border: 1.5px solid var(--border); background: var(--bg2);
-  font-size: 22px; font-weight: 700; color: var(--text);
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
+/* ── LOSS PREVIEW ─────────────────────────────────────────────────────────── */
+.loss-preview {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--red-pale); border: 1.5px solid var(--red);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
+  font-size: 12px; color: var(--red);
 }
-.qty-btn:active { background: var(--border); transform: scale(0.92); }
-.qty-input { text-align: center; font-size: 18px !important; font-weight: 700 !important; }
-.qty-hint { margin-top: 8px; font-size: 12px; color: var(--muted); background: var(--bg2); border-radius: 8px; padding: 8px 10px; }
-.qty-hint strong { color: var(--text); }
-.amount-input { font-size: 22px !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; }
-
-.btn-full {
-  width: 100%; padding: 14px; border-radius: 12px; border: none; margin-top: 8px;
-  background: var(--green); color: #fff; font-family: 'Outfit', sans-serif;
-  font-size: 15px; font-weight: 700; cursor: pointer;
+.loss-val {
+  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700;
 }
-.btn-full:disabled { opacity: 0.45; cursor: default; }
-.btn-full.danger { background: var(--red); }
 
-.modal-enter-active, .modal-leave-active { transition: all 0.25s ease; }
-.modal-enter-from .modal, .modal-leave-to .modal { transform: translateY(100%); }
-
-/* SELL MODAL */
+/* ── SELL BATCH LIST ──────────────────────────────────────────────────────── */
 .sell-batch-list { display: flex; flex-direction: column; gap: 8px; }
 .sell-batch-btn {
   display: flex; align-items: center; gap: 12px;
@@ -813,15 +1099,16 @@ async function submitSell() {
   text-align: left; cursor: pointer; transition: all 0.15s; width: 100%;
   font-family: 'Outfit', sans-serif;
 }
-.sell-batch-btn.active { border-color: var(--green); background: var(--green-pale); }
+.sell-batch-btn.active  { border-color: var(--green); background: var(--green-pale); }
+.sell-batch-btn:active  { transform: scale(0.98); }
 .sbb-emoji { font-size: 22px; flex-shrink: 0; }
 .sbb-info  { display: flex; flex-direction: column; gap: 2px; }
 .sbb-label { font-size: 14px; font-weight: 600; color: var(--text); }
 .sbb-meta  { font-size: 11px; color: var(--muted); }
 
+/* ── PROFIT PREVIEW ───────────────────────────────────────────────────────── */
 .profit-preview {
-  border-radius: 12px; padding: 14px 16px; margin: 4px 0 8px;
-  border: 1.5px solid;
+  border-radius: 12px; padding: 14px 16px; margin: 4px 0 8px; border: 1.5px solid;
 }
 .profit-preview.gain { background: var(--green-pale); border-color: var(--green); }
 .profit-preview.loss { background: var(--red-pale);   border-color: var(--red); }
@@ -830,8 +1117,26 @@ async function submitSell() {
   font-size: 13px; color: var(--muted); padding: 4px 0;
 }
 .pp-row.result { font-weight: 700; font-size: 14px; color: var(--text); }
-.pp-divider { height: 1px; background: rgba(255,255,255,0.3); margin: 6px 0; }
+.pp-divider    { height: 1px; background: var(--border); margin: 6px 0; }
 .pp-row .green { color: var(--green); font-family: 'JetBrains Mono', monospace; }
 .pp-row .red   { color: var(--red);   font-family: 'JetBrains Mono', monospace; }
 
+/* ── SUBMIT BUTTON ────────────────────────────────────────────────────────── */
+.btn-full {
+  width: 100%; padding: 14px; border-radius: 12px; border: none; margin-top: 8px;
+  background: var(--green); color: #fff;
+  font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: opacity 0.15s;
+}
+.btn-full:disabled          { opacity: 0.45; cursor: default; }
+.btn-full:active:not(:disabled) { opacity: 0.85; }
+.btn-full.danger            { background: var(--red); }
+
+/* ── TRANSITIONS ──────────────────────────────────────────────────────────── */
+.err-pop-enter-active, .err-pop-leave-active { transition: all 0.15s ease; }
+.err-pop-enter-from, .err-pop-leave-to       { opacity: 0; transform: translateY(-3px); }
+
+.modal-enter-active, .modal-leave-active { transition: all 0.25s ease; }
+.modal-enter-from .modal, .modal-leave-to .modal { transform: translateY(100%); }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>

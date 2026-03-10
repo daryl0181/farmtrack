@@ -6,6 +6,7 @@ import {
   onSnapshot,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   query,
   orderBy,
@@ -38,7 +39,12 @@ export const useFinanceStore = defineStore("finance", () => {
     await addDoc(collection(db, "transactions"), {
       ...data,
       amount: Number(data.amount),
+      createdAt: new Date().toISOString(),
     });
+  }
+
+  async function updateTransaction(id, data) {
+    await updateDoc(doc(db, "transactions", id), data);
   }
 
   async function removeTransaction(id) {
@@ -54,14 +60,13 @@ export const useFinanceStore = defineStore("finance", () => {
     );
   });
 
-  // ── OTHER INCOME (non-animal-sale: eggs, milk, manure, etc.) ─────────────
+  // ── INCOME BREAKDOWN ──────────────────────────────────────────────────────
   const otherIncome = computed(() =>
     transactions.value
       .filter((t) => t.type === "Income" && t.category !== "Animal Sale")
       .reduce((s, t) => s + Number(t.amount), 0),
   );
 
-  // Total income = all income transactions (for display in header)
   const totalIncome = computed(() =>
     transactions.value
       .filter((t) => t.type === "Income")
@@ -74,21 +79,17 @@ export const useFinanceStore = defineStore("finance", () => {
       .filter((t) => t.type === "Expense")
       .reduce((s, t) => s + Number(t.amount), 0),
   );
-  const totalExpenses = operatingExpenses; // alias
+  const totalExpenses = operatingExpenses;
 
   // ── DEATH LOSS ────────────────────────────────────────────────────────────
-  // Total investment value lost to animal deaths
   const deathLoss = computed(() => {
     const animalStore = useAnimalStore();
     return animalStore.batches.reduce((sum, b) => {
-      const died = Number(b.totalDied) || 0;
-      const costPerHead = Number(b.pricePerHead) || 0;
-      return sum + died * costPerHead;
+      return sum + (Number(b.totalDied) || 0) * (Number(b.pricePerHead) || 0);
     }, 0);
   });
 
   // ── REALIZED SALE LOSS ────────────────────────────────────────────────────
-  // Sum of negative sale profits (sold below cost)
   const realizedSaleLoss = computed(() => {
     const animalStore = useAnimalStore();
     return animalStore.soldBatches.reduce((sum, s) => {
@@ -97,12 +98,12 @@ export const useFinanceStore = defineStore("finance", () => {
     }, 0);
   });
 
-  // ── NET PROFIT / LOSS ─────────────────────────────────────────────────────
+  // ── NET PROFIT ────────────────────────────────────────────────────────────
   const profit = computed(
     () => totalSaleProfit.value + otherIncome.value - operatingExpenses.value,
   );
 
-  // ── ANIMAL INVESTMENT (asset, not in P&L) ─────────────────────────────────
+  // ── ANIMAL INVESTMENT ─────────────────────────────────────────────────────
   const totalAnimalInvestment = computed(() => {
     const animalStore = useAnimalStore();
     return animalStore.batches.reduce(
@@ -112,7 +113,6 @@ export const useFinanceStore = defineStore("finance", () => {
     );
   });
 
-  // ROI = profit vs total capital invested in animals
   const roi = computed(() =>
     totalAnimalInvestment.value > 0
       ? (profit.value / totalAnimalInvestment.value) * 100
@@ -134,6 +134,25 @@ export const useFinanceStore = defineStore("finance", () => {
       .reduce((s, t) => s + Number(t.amount), 0),
   );
 
+  // ── MONTHLY TREND (last 6 months) ─────────────────────────────────────────
+  const monthlyTrend = computed(() => {
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const key = d.toISOString().slice(0, 7);
+      const label = d.toLocaleDateString("en-PH", { month: "short" });
+      const income = transactions.value
+        .filter((t) => t.type === "Income" && t.date?.startsWith(key))
+        .reduce((s, t) => s + Number(t.amount), 0);
+      const expense = transactions.value
+        .filter((t) => t.type === "Expense" && t.date?.startsWith(key))
+        .reduce((s, t) => s + Number(t.amount), 0);
+      months.push({ key, label, income, expense, net: income - expense });
+    }
+    return months;
+  });
+
   // ── BREAKDOWNS ────────────────────────────────────────────────────────────
   const transactionBreakdown = computed(() => {
     const cats = {};
@@ -143,12 +162,32 @@ export const useFinanceStore = defineStore("finance", () => {
         cats[t.category] = (cats[t.category] || 0) + Number(t.amount);
       });
     const total = Object.values(cats).reduce((a, b) => a + b, 0) || 1;
-    return Object.entries(cats).map(([name, val]) => ({
-      name,
-      total: val,
-      pct: Math.round((val / total) * 100),
-      icon: categoryIcon(name),
-    }));
+    return Object.entries(cats)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, val]) => ({
+        name,
+        total: val,
+        pct: Math.round((val / total) * 100),
+        icon: categoryIcon(name),
+      }));
+  });
+
+  const incomeBreakdown = computed(() => {
+    const cats = {};
+    transactions.value
+      .filter((t) => t.type === "Income")
+      .forEach((t) => {
+        cats[t.category] = (cats[t.category] || 0) + Number(t.amount);
+      });
+    const total = Object.values(cats).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(cats)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, val]) => ({
+        name,
+        total: val,
+        pct: Math.round((val / total) * 100),
+        icon: categoryIcon(name),
+      }));
   });
 
   const expenseBreakdown = computed(() => {
@@ -178,40 +217,38 @@ export const useFinanceStore = defineStore("finance", () => {
     }));
   });
 
-  function categoryIcon(cat) {
-    return (
-      {
-        Feeds: "🌾",
-        Medicine: "💊",
-        Veterinary: "🩺",
-        Labor: "👷",
-        Equipment: "🔧",
-        "Animal Sale": "💰",
-        "Egg Sale": "🥚",
-        "Milk Sale": "🥛",
-        "Manure Sale": "🌿",
-        Other: "📋",
-      }[cat] ?? "💸"
-    );
+  // ── FILTERED TRANSACTIONS ─────────────────────────────────────────────────
+  function getFilteredTransactions({ type, category, month, search } = {}) {
+    return transactions.value.filter((t) => {
+      if (type && t.type !== type) return false;
+      if (category && t.category !== category) return false;
+      if (month && !t.date?.startsWith(month)) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          t.description?.toLowerCase().includes(q) ||
+          t.category?.toLowerCase().includes(q) ||
+          String(t.amount).includes(q)
+        );
+      }
+      return true;
+    });
   }
 
-  // ── ORPHAN CLEANUP ───────────────────────────────────────────────────────
-  // Animal Sale transactions that exist in "transactions" but have no matching
-  // soldBatch. These are leftovers from before the transactionId fix.
+  // ── ORPHAN CLEANUP ────────────────────────────────────────────────────────
   const orphanedSaleTransactions = computed(() => {
     const animalStore = useAnimalStore();
     const linkedIds = new Set(
       animalStore.soldBatches.map((s) => s.transactionId).filter(Boolean),
     );
-    // Also treat soldBatches without transactionId as "covered" by matching amount+date
     const coveredKeys = new Set(
       animalStore.soldBatches.map((s) => `${s.totalRevenue}__${s.soldDate}`),
     );
     return transactions.value.filter((t) => {
       if (t.category !== "Animal Sale") return false;
-      if (linkedIds.has(t.id)) return false; // has direct link
-      if (coveredKeys.has(`${t.amount}__${t.date}`)) return false; // matched by amount+date
-      return true; // truly orphaned
+      if (linkedIds.has(t.id)) return false;
+      if (coveredKeys.has(`${t.amount}__${t.date}`)) return false;
+      return true;
     });
   });
 
@@ -223,20 +260,50 @@ export const useFinanceStore = defineStore("finance", () => {
     return orphans.length;
   }
 
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+  function categoryIcon(cat) {
+    return (
+      {
+        Feeds: "🌾",
+        Medicine: "💊",
+        Veterinary: "🩺",
+        Labor: "👷",
+        Equipment: "🔧",
+        Utilities: "💡",
+        Transport: "🚗",
+        "Animal Sale": "💰",
+        "Egg Sale": "🥚",
+        "Milk Sale": "🥛",
+        "Manure Sale": "🌿",
+        Other: "📋",
+      }[cat] ?? "💸"
+    );
+  }
+
+  const EXPENSE_CATEGORIES = [
+    "Feeds",
+    "Medicine",
+    "Veterinary",
+    "Labor",
+    "Equipment",
+    "Utilities",
+    "Transport",
+    "Other",
+  ];
+  const INCOME_CATEGORIES = [
+    "Animal Sale",
+    "Egg Sale",
+    "Milk Sale",
+    "Manure Sale",
+    "Other",
+  ];
+
   function formatNum(n) {
     return Number(n || 0).toLocaleString("en-PH");
   }
 
-  // ── ORPHANED SALE TRANSACTIONS ────────────────────────────────────────────
-  
-
-  // Delete all orphaned Animal Sale transactions in one shot
-  async function cleanupOrphanedSaleTransactions() {
-    const orphans = orphanedSaleTransactions.value;
-    await Promise.all(
-      orphans.map((t) => deleteDoc(doc(db, "transactions", t.id))),
-    );
-    return orphans.length;
+  function formatCurrency(n) {
+    return `₱${formatNum(n)}`;
   }
 
   return {
@@ -253,15 +320,22 @@ export const useFinanceStore = defineStore("finance", () => {
     totalAnimalInvestment,
     monthIncome,
     monthExpenses,
+    monthlyTrend,
     expenseBreakdown,
+    incomeBreakdown,
     transactionBreakdown,
     saleProfitBreakdown,
     startListener,
     stopListener,
     addTransaction,
+    updateTransaction,
     removeTransaction,
+    getFilteredTransactions,
     categoryIcon,
     formatNum,
+    formatCurrency,
+    EXPENSE_CATEGORIES,
+    INCOME_CATEGORIES,
     orphanedSaleTransactions,
     cleanupOrphanedSaleTransactions,
   };
